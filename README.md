@@ -32,6 +32,14 @@ https://github.com/roboflow/supervision/assets/26109316/d50118c1-2ae4-458d-915a-
   uv pip install -r requirements.txt
   ```
 
+  `requirements.txt` adalah dependensi untuk web UI dan contoh Ultralytics.
+  Contoh YOLO-NAS dan Roboflow Inference memakai dependensi tambahan:
+
+  ```bash
+  uv pip install -r requirements-yolo-nas.txt
+  uv pip install -r requirements-inference.txt
+  ```
+
 - download `vehicles.mp4` file
 
   ```bash
