@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <title>SpeedLens - Estimasi Kecepatan Kendaraan</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <a class="brand" href="/">SpeedLens</a>
+        <p>Analisis kecepatan kendaraan dari rekaman video</p>
+      </header>
+
+      <section class="workspace" aria-labelledby="page-title">
+        <div class="intro">
+          <span class="kicker">YOLO11N + ByteTrack</span>
+          <h1 id="page-title">Ukur pergerakan, lihat hasilnya dalam satu video.</h1>
+          <p>Unggah rekaman lalu tentukan area jalan untuk membuat video beranotasi dengan estimasi kecepatan tiap kendaraan.</p>
+        </div>
+
+        <form id="analysis-form" class="analysis-form">
+          <div class="upload-panel">
+            <label class="upload-target" for="video">
+              <span class="upload-title">Pilih video lalu mulai analisis</span>
+              <span class="upload-copy">MP4, MOV, AVI, MKV, atau M4V. Maksimum 2 GB.</span>
+              <span class="choose-file">Pilih video</span>
+              <input id="video" name="video" type="file" accept="video/*" required>
+              <span id="file-name" class="file-name">Belum ada file dipilih</span>
+            </label>
+          </div>
+
+          <div class="settings" aria-label="Konfigurasi analisis">
+            <div class="setting setting-wide">
+              <label for="source_polygon">Area jalan</label>
+              <input id="source_polygon" name="source_polygon" value="{{ default_source }}" required>
+              <small>Empat titik x,y dipisahkan titik koma. Sesuaikan dengan sudut kamera Anda.</small>
+            </div>
+            <div class="setting">
+              <label for="target_width">Lebar target</label>
+              <input id="target_width" name="target_width" type="number" min="1" value="25" required>
+            </div>
+            <div class="setting">
+              <label for="target_height">Panjang target</label>
+              <input id="target_height" name="target_height" type="number" min="1" value="250" required>
+            </div>
+            <div class="setting">
+              <label for="confidence_threshold">Confidence</label>
+              <input id="confidence_threshold" name="confidence_threshold" type="number" min="0.01" max="1" step="0.01" value="0.30" required>
+            </div>
+            <div class="setting">
+              <label for="iou_threshold">IoU</label>
+              <input id="iou_threshold" name="iou_threshold" type="number" min="0.01" max="1" step="0.01" value="0.50" required>
+            </div>
+          </div>
+
+          <div class="action-row">
+            <p>Gunakan koordinat contoh hanya untuk video `vehicles.mp4`. Video lain memerlukan kalibrasi sendiri.</p>
+            <button id="submit-button" type="submit">Mulai analisis</button>
+          </div>
+        </form>
+
+        <section id="status-panel" class="status-panel" hidden aria-live="polite">
+          <div>
+            <p id="status-label" class="status-label">Menyiapkan analisis</p>
+            <p id="status-detail">Video sedang diproses dengan yolo11n.pt.</p>
+          </div>
+          <strong id="progress-value">0%</strong>
+          <div class="progress-track" aria-hidden="true"><span id="progress-bar"></span></div>
+        </section>
+
+        <section id="result-panel" class="result-panel" hidden aria-labelledby="result-title">
+          <div class="result-heading">
+            <div>
+              <span class="kicker">Selesai</span>
+              <h2 id="result-title">Video hasil analisis</h2>
+            </div>
+            <a id="download-link" class="download-link" download>Unduh hasil</a>
+          </div>
+          <video id="result-video" controls playsinline></video>
+        </section>
+
+        <section id="error-panel" class="error-panel" hidden aria-live="assertive">
+          <strong>Analisis belum dapat dijalankan.</strong>
+          <p id="error-message"></p>
+        </section>
+      </section>
+    </main>
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+  </body>
+</html>
