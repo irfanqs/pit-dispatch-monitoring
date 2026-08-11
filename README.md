@@ -77,10 +77,12 @@ python app.py
 ```
 
 Buka `http://127.0.0.1:5000` pada browser. Unggah video, masukkan kalibrasi
-area jalan, kemudian pilih **Mulai analisis**. Hasil akan tersedia untuk diputar
-dan diunduh dari halaman tersebut. Koordinat bawaan hanya sesuai untuk video
-contoh `vehicles.mp4`. Bobot `yolo11n.pt` diunduh otomatis ketika analisis
-pertama dimulai.
+area jalan, kemudian pilih **Mulai analisis**. Untuk kalibrasi, jeda video pada
+frame yang jelas lalu klik empat sudut area jalan secara berurutan: kiri atas,
+kanan atas, kanan bawah, kiri bawah. Hasil akan tersedia untuk diputar dan
+diunduh dari halaman tersebut. Koordinat bawaan hanya sesuai untuk video contoh
+`vehicles.mp4`. Bobot `yolo11n.pt` diunduh otomatis ketika analisis pertama
+dimulai.
 
 - yolo-nas
 

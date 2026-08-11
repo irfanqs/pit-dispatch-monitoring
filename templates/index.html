@@ -32,11 +32,30 @@
             </label>
           </div>
 
+          <section id="calibration-panel" class="calibration-panel" hidden aria-labelledby="calibration-title">
+            <div class="calibration-heading">
+              <div>
+                <span class="kicker">Kalibrasi visual</span>
+                <h2 id="calibration-title">Klik empat sudut area jalan</h2>
+                <p id="calibration-instruction">Pilih video terlebih dahulu.</p>
+              </div>
+              <div class="calibration-actions">
+                <button id="undo-point" type="button" class="secondary-button" disabled>Hapus titik terakhir</button>
+                <button id="reset-points" type="button" class="secondary-button" disabled>Ulangi titik</button>
+              </div>
+            </div>
+            <div class="video-calibrator">
+              <video id="calibration-video" controls playsinline></video>
+              <canvas id="calibration-canvas" aria-label="Area untuk memilih empat titik kalibrasi"></canvas>
+            </div>
+            <p class="calibration-help">Pilih berurutan: kiri atas, kanan atas, kanan bawah, lalu kiri bawah. Anda dapat menjeda video pada frame yang paling jelas.</p>
+          </section>
+
           <div class="settings" aria-label="Konfigurasi analisis">
             <div class="setting setting-wide">
               <label for="source_polygon">Area jalan</label>
               <input id="source_polygon" name="source_polygon" value="{{ default_source }}" required>
-              <small>Empat titik x,y dipisahkan titik koma. Sesuaikan dengan sudut kamera Anda.</small>
+              <small>Terisi otomatis setelah empat titik dipilih. Anda tetap dapat memasukkan koordinat secara manual.</small>
             </div>
             <div class="setting">
               <label for="target_width">Lebar target</label>
