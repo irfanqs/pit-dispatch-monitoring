@@ -84,7 +84,8 @@ area jalan, kemudian pilih metode pengukuran:
   lebar dan panjang nyata area tersebut dalam meter.
 - **Gate**: klik dua titik untuk Gate A, lalu dua titik untuk Gate B. Masukkan
   jarak nyata antar-gate dalam meter. Kecepatan dihitung dari waktu kendaraan
-  yang sama melintasi Gate A lalu Gate B.
+  yang sama melintasi kedua gate. Kedua arah perjalanan didukung: Gate A ke
+  Gate B maupun Gate B ke Gate A.
 
 Hasil akan tersedia untuk diputar dan diunduh dari halaman tersebut. Koordinat
 bawaan hanya sesuai untuk video contoh `vehicles.mp4`. Bobot `yolo11n.pt`

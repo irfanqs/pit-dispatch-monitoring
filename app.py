@@ -172,7 +172,7 @@ def run_estimation(
             lambda: deque(maxlen=max(1, int(video_info.fps)))
         )
         previous_positions: dict[int, Point] = {}
-        gate_entry_frames: dict[int, int] = {}
+        gate_entry_states: dict[int, tuple[str, int]] = {}
         completed_speeds: dict[int, int] = {}
         frame_count = max(video_info.total_frames, 1)
 
@@ -212,10 +212,22 @@ def run_estimation(
                         current_position = (float(point[0]), float(point[1]))
                         previous_position = previous_positions.get(tracker_key)
                         if previous_position is not None:
-                            if tracker_key not in gate_entry_frames and segments_intersect(previous_position, current_position, gate_a[0], gate_a[1]):
-                                gate_entry_frames[tracker_key] = frame_index
-                            elif tracker_key in gate_entry_frames and tracker_key not in completed_speeds and segments_intersect(previous_position, current_position, gate_b[0], gate_b[1]):
-                                elapsed_time = (frame_index - gate_entry_frames[tracker_key]) / video_info.fps
+                            crossed_gate_a = segments_intersect(
+                                previous_position, current_position, gate_a[0], gate_a[1]
+                            )
+                            crossed_gate_b = segments_intersect(
+                                previous_position, current_position, gate_b[0], gate_b[1]
+                            )
+                            entry_state = gate_entry_states.get(tracker_key)
+                            if entry_state is None and crossed_gate_a:
+                                gate_entry_states[tracker_key] = ("a", frame_index)
+                            elif entry_state is None and crossed_gate_b:
+                                gate_entry_states[tracker_key] = ("b", frame_index)
+                            elif tracker_key not in completed_speeds and (
+                                (entry_state[0] == "a" and crossed_gate_b)
+                                or (entry_state[0] == "b" and crossed_gate_a)
+                            ):
+                                elapsed_time = (frame_index - entry_state[1]) / video_info.fps
                                 if elapsed_time > 0:
                                     completed_speeds[tracker_key] = int(gate_distance / elapsed_time * 3.6)
                         previous_positions[tracker_key] = current_position
