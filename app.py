@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import json
 import threading
 import uuid
 from collections import defaultdict, deque
@@ -41,10 +42,24 @@ def parse_polygon(value: str) -> list[list[float]]:
     return points
 
 
-def parse_gate(value: str) -> tuple[Point, Point]:
-    """Parse two x,y coordinate pairs that define a virtual gate line."""
-    points = parse_polygon(f"{value};0,0;0,0")[:2]
-    return (points[0][0], points[0][1]), (points[1][0], points[1][1])
+def parse_gate_definitions(value: str) -> tuple[list[tuple[Point, Point]], list[float]]:
+    """Parse ordered gate lines and distances between adjacent gates from JSON."""
+    payload = json.loads(value)
+    raw_gates = payload["gates"]
+    raw_distances = payload["distances"]
+    if len(raw_gates) < 2 or len(raw_distances) != len(raw_gates) - 1:
+        raise ValueError("Setidaknya dua gate dan jarak antar-gate diperlukan.")
+    gates: list[tuple[Point, Point]] = []
+    for raw_gate in raw_gates:
+        if len(raw_gate) != 2 or any(len(point) != 2 for point in raw_gate):
+            raise ValueError("Setiap gate harus memiliki tepat dua titik.")
+        start = (float(raw_gate[0][0]), float(raw_gate[0][1]))
+        end = (float(raw_gate[1][0]), float(raw_gate[1][1]))
+        gates.append((start, end))
+    distances = [float(distance) for distance in raw_distances]
+    if any(distance <= 0 for distance in distances):
+        raise ValueError("Semua jarak antar-gate harus lebih besar dari nol.")
+    return gates, distances
 
 
 def cross_product(first: Point, second: Point, third: Point) -> float:
@@ -113,9 +128,8 @@ def run_estimation(
     source_polygon: list[list[float]] | None,
     target_width: float | None,
     target_height: float | None,
-    gate_a: tuple[Point, Point] | None,
-    gate_b: tuple[Point, Point] | None,
-    gate_distance: float | None,
+    gates: list[tuple[Point, Point]] | None,
+    gate_distances: list[float] | None,
     confidence_threshold: float,
     iou_threshold: float,
 ) -> None:
@@ -144,7 +158,7 @@ def run_estimation(
             matrix = cv2.getPerspectiveTransform(source, target)
             polygon_zone = sv.PolygonZone(polygon=source)
         elif mode == "gate":
-            if gate_a is None or gate_b is None or gate_distance is None:
+            if gates is None or gate_distances is None:
                 raise ValueError("Kalibrasi gate belum lengkap.")
             matrix = None
             polygon_zone = None
@@ -172,7 +186,7 @@ def run_estimation(
             lambda: deque(maxlen=max(1, int(video_info.fps)))
         )
         previous_positions: dict[int, Point] = {}
-        gate_entry_states: dict[int, tuple[str, int]] = {}
+        gate_entry_states: dict[int, tuple[int, int]] = {}
         completed_speeds: dict[int, int] = {}
         frame_count = max(video_info.total_frames, 1)
 
@@ -212,24 +226,29 @@ def run_estimation(
                         current_position = (float(point[0]), float(point[1]))
                         previous_position = previous_positions.get(tracker_key)
                         if previous_position is not None:
-                            crossed_gate_a = segments_intersect(
-                                previous_position, current_position, gate_a[0], gate_a[1]
-                            )
-                            crossed_gate_b = segments_intersect(
-                                previous_position, current_position, gate_b[0], gate_b[1]
-                            )
+                            crossed_gate_indices = [
+                                index
+                                for index, gate in enumerate(gates)
+                                if segments_intersect(
+                                    previous_position, current_position, gate[0], gate[1]
+                                )
+                            ]
+                            crossed_gate_index = crossed_gate_indices[0] if crossed_gate_indices else None
                             entry_state = gate_entry_states.get(tracker_key)
-                            if entry_state is None and crossed_gate_a:
-                                gate_entry_states[tracker_key] = ("a", frame_index)
-                            elif entry_state is None and crossed_gate_b:
-                                gate_entry_states[tracker_key] = ("b", frame_index)
-                            elif tracker_key not in completed_speeds and (
-                                (entry_state[0] == "a" and crossed_gate_b)
-                                or (entry_state[0] == "b" and crossed_gate_a)
-                            ):
-                                elapsed_time = (frame_index - entry_state[1]) / video_info.fps
-                                if elapsed_time > 0:
-                                    completed_speeds[tracker_key] = int(gate_distance / elapsed_time * 3.6)
+                            if entry_state is None and crossed_gate_index is not None:
+                                gate_entry_states[tracker_key] = (crossed_gate_index, frame_index)
+                            elif crossed_gate_index is not None and entry_state is not None:
+                                previous_gate_index = entry_state[0]
+                                if abs(previous_gate_index - crossed_gate_index) != 1:
+                                    gate_entry_states[tracker_key] = (crossed_gate_index, frame_index)
+                                else:
+                                    elapsed_time = (frame_index - entry_state[1]) / video_info.fps
+                                    if elapsed_time > 0:
+                                        distance_index = min(previous_gate_index, crossed_gate_index)
+                                        completed_speeds[tracker_key] = int(
+                                            gate_distances[distance_index] / elapsed_time * 3.6
+                                        )
+                                    gate_entry_states[tracker_key] = (crossed_gate_index, frame_index)
                         previous_positions[tracker_key] = current_position
                         speed = completed_speeds.get(tracker_key)
                         labels.append(f"#{tracker_id}" if speed is None else f"#{tracker_id} {speed} km/h")
@@ -238,12 +257,19 @@ def run_estimation(
                 annotated_frame = box_annotator.annotate(annotated_frame, detections)
                 annotated_frame = label_annotator.annotate(annotated_frame, detections, labels)
                 if mode == "gate":
-                    gate_a_start = tuple(map(int, gate_a[0]))
-                    gate_a_end = tuple(map(int, gate_a[1]))
-                    gate_b_start = tuple(map(int, gate_b[0]))
-                    gate_b_end = tuple(map(int, gate_b[1]))
-                    cv2.line(annotated_frame, gate_a_start, gate_a_end, (80, 190, 80), thickness)
-                    cv2.line(annotated_frame, gate_b_start, gate_b_end, (80, 190, 80), thickness)
+                    for index, gate in enumerate(gates):
+                        gate_start = tuple(map(int, gate[0]))
+                        gate_end = tuple(map(int, gate[1]))
+                        cv2.line(annotated_frame, gate_start, gate_end, (80, 190, 80), thickness)
+                        cv2.putText(
+                            annotated_frame,
+                            chr(65 + index),
+                            gate_start,
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            text_scale,
+                            (80, 190, 80),
+                            thickness,
+                        )
                 mux_h264_frame(output_container, output_stream, annotated_frame)
                 update_job(job_id, progress=round(frame_index / frame_count * 100))
         finally:
@@ -282,9 +308,8 @@ def create_job() -> tuple[Any, int] | Any:
         source_polygon = None
         target_width = None
         target_height = None
-        gate_a = None
-        gate_b = None
-        gate_distance = None
+        gates = None
+        gate_distances = None
         if mode == "polygon":
             source_polygon = parse_polygon(request.form["source_polygon"])
             target_width = float(request.form["target_width"])
@@ -292,11 +317,7 @@ def create_job() -> tuple[Any, int] | Any:
             if min(target_width, target_height) <= 0:
                 raise ValueError("Ukuran target harus lebih besar dari nol.")
         elif mode == "gate":
-            gate_a = parse_gate(request.form["gate_a"])
-            gate_b = parse_gate(request.form["gate_b"])
-            gate_distance = float(request.form["gate_distance"])
-            if gate_distance <= 0:
-                raise ValueError("Jarak antar gate harus lebih besar dari nol.")
+            gates, gate_distances = parse_gate_definitions(request.form["gate_definitions"])
         else:
             raise ValueError("Metode pengukuran tidak dikenali.")
     except (KeyError, TypeError, ValueError) as error:
@@ -321,9 +342,8 @@ def create_job() -> tuple[Any, int] | Any:
             "source_polygon": source_polygon,
             "target_width": target_width,
             "target_height": target_height,
-            "gate_a": gate_a,
-            "gate_b": gate_b,
-            "gate_distance": gate_distance,
+            "gates": gates,
+            "gate_distances": gate_distances,
             "confidence_threshold": confidence_threshold,
             "iou_threshold": iou_threshold,
         },

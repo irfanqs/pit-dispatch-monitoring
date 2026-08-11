@@ -90,20 +90,11 @@
             </div>
 
             <div id="gate-settings" class="settings" hidden aria-label="Konfigurasi gate">
-              <div class="setting setting-wide">
-                <label for="gate_a">Gate A</label>
-                <input id="gate_a" name="gate_a" readonly>
-                <small>Garis awal. Klik dua titik yang melintang pada arah perjalanan kendaraan.</small>
-              </div>
-              <div class="setting setting-wide">
-                <label for="gate_b">Gate B</label>
-                <input id="gate_b" name="gate_b" readonly>
-                <small>Garis akhir. Pilih dua titik pada garis melintang berikutnya.</small>
-              </div>
-              <div class="setting">
-                <label for="gate_distance">Jarak Gate A ke Gate B</label>
-                <input id="gate_distance" name="gate_distance" type="number" min="0.1" step="0.1" placeholder="Contoh: 50">
-                <small>Meter, mengikuti permukaan jalan.</small>
+              <input id="gate_definitions" name="gate_definitions" type="hidden">
+              <div id="gate-list" class="gate-list"></div>
+              <div class="setting gate-add-setting">
+                <button id="add-gate" type="button" class="secondary-button">Tambah gate</button>
+                <small>Setiap gate baru membutuhkan dua titik dan jarak dari gate sebelumnya.</small>
               </div>
               <div class="setting">
                 <label for="confidence_threshold_gate">Confidence</label>
@@ -117,7 +108,6 @@
               </div>
             </div>
           </section>
-          </div>
 
           <div class="action-row">
             <p>Gunakan koordinat contoh hanya untuk video `vehicles.mp4`. Video lain memerlukan kalibrasi sendiri.</p>
