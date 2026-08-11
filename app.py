@@ -133,7 +133,7 @@ def run_estimation(
             polygon_zone = None
         else:
             raise ValueError("Metode pengukuran tidak dikenali.")
-        model = YOLO("yolo11n.pt")
+        model = YOLO("yolo11x.pt")
         tracker = sv.ByteTrack(
             frame_rate=video_info.fps,
             track_activation_threshold=confidence_threshold,
