@@ -8,6 +8,7 @@ const calibrationInstruction = document.querySelector("#calibration-instruction"
 const sourcePolygon = document.querySelector("#source_polygon");
 const polygonSettings = document.querySelector("#polygon-settings");
 const gateSettings = document.querySelector("#gate-settings");
+const measurementSettings = document.querySelector("#measurement-settings");
 const gateA = document.querySelector("#gate_a");
 const gateB = document.querySelector("#gate_b");
 const gateDistance = document.querySelector("#gate_distance");
@@ -129,6 +130,7 @@ fileInput.addEventListener("change", () => {
   calibrationUrl = URL.createObjectURL(file);
   calibrationVideo.src = calibrationUrl;
   calibrationPanel.hidden = false;
+  measurementSettings.hidden = false;
   setModeSettings();
   resetCalibration();
 });
