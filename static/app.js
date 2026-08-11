@@ -28,6 +28,7 @@ const progressBar = document.querySelector("#progress-bar");
 const resultPanel = document.querySelector("#result-panel");
 const resultVideo = document.querySelector("#result-video");
 const downloadLink = document.querySelector("#download-link");
+const downloadLogLink = document.querySelector("#download-log-link");
 const errorPanel = document.querySelector("#error-panel");
 const errorMessage = document.querySelector("#error-message");
 let calibrationPoints = [];
@@ -281,6 +282,7 @@ async function pollJob(jobId) {
   statusDetail.textContent = "Video hasil siap diputar atau diunduh.";
   resultVideo.src = job.result_url;
   downloadLink.href = job.result_url;
+  downloadLogLink.href = job.log_url;
   resultPanel.hidden = false;
   submitButton.disabled = false;
   submitButton.textContent = "Analisis video lain";

@@ -4,3 +4,4 @@ requests
 ultralytics
 jsonargparse[signatures]
 Flask
+openpyxl

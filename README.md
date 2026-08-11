@@ -93,6 +93,10 @@ Hasil akan tersedia untuk diputar dan diunduh dari halaman tersebut. Koordinat
 bawaan hanya sesuai untuk video contoh `vehicles.mp4`. Bobot `yolo11n.pt`
 diunduh otomatis ketika analisis pertama dimulai.
 
+Setiap analisis juga menghasilkan log Excel yang dapat diunduh dari halaman
+hasil. Workbook berisi ringkasan, seluruh deteksi ter-track per frame, dan
+riwayat pengukuran kecepatan per area atau segmen gate.
+
 - yolo-nas
 
   ```bash

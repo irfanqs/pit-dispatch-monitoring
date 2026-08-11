@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import os
 import json
+import os
 import threading
 import uuid
 from collections import defaultdict, deque
@@ -16,6 +16,7 @@ from werkzeug.utils import secure_filename
 BASE_DIR = Path(__file__).resolve().parent
 UPLOAD_DIR = BASE_DIR / "data" / "uploads"
 RESULT_DIR = BASE_DIR / "data" / "results"
+LOG_DIR = BASE_DIR / "data" / "logs"
 ALLOWED_EXTENSIONS = {"mp4", "mov", "avi", "mkv", "m4v"}
 DEFAULT_SOURCE = "1252,787;2298,803;5039,2159;-550,2159"
 
@@ -120,10 +121,153 @@ def finish_h264_encoding(output_container: Any, output_stream: Any) -> None:
     output_container.close()
 
 
+def format_log_sheet(worksheet: Any) -> None:
+    """Apply consistent header, width, and frozen-row formatting to a log sheet."""
+    from openpyxl.styles import Font, PatternFill
+
+    header_fill = PatternFill("solid", fgColor="006F62")
+    for cell in worksheet[1]:
+        cell.fill = header_fill
+        cell.font = Font(color="FFFFFF", bold=True)
+    worksheet.freeze_panes = "A2"
+    worksheet.auto_filter.ref = worksheet.dimensions
+    for column_cells in worksheet.columns:
+        column_letter = column_cells[0].column_letter
+        longest_value = max(len(str(cell.value or "")) for cell in column_cells)
+        worksheet.column_dimensions[column_letter].width = min(max(longest_value + 2, 12), 28)
+
+
+def write_detection_workbook(
+    target_path: Path,
+    source_video_name: str,
+    mode: str,
+    video_fps: float,
+    video_frame_count: int,
+    detection_logs: list[dict[str, Any]],
+    speed_logs: list[dict[str, Any]],
+) -> None:
+    """Write detection and speed measurements to a formatted Excel workbook."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill
+
+    workbook = Workbook()
+    summary = workbook.active
+    summary.title = "Ringkasan"
+    summary.append(["Ringkasan Analisis Kecepatan", ""])
+    summary.merge_cells("A1:B1")
+    summary["A1"].font = Font(color="FFFFFF", bold=True, size=14)
+    summary["A1"].fill = PatternFill("solid", fgColor="006F62")
+    summary.append(["Video sumber", source_video_name])
+    summary.append(["Metode", mode.title()])
+    summary.append(["FPS", video_fps])
+    summary.append(["Frame diproses", video_frame_count])
+    summary.append(["Jumlah deteksi", len(detection_logs)])
+    summary.append(["Pengukuran kecepatan", len(speed_logs)])
+    summary.column_dimensions["A"].width = 28
+    summary.column_dimensions["B"].width = 32
+
+    detections_sheet = workbook.create_sheet("Deteksi")
+    detections_sheet.append(
+        [
+            "Frame",
+            "Waktu video (detik)",
+            "Tracker ID",
+            "Kelas ID",
+            "Confidence",
+            "X1",
+            "Y1",
+            "X2",
+            "Y2",
+            "Mode",
+            "Kecepatan terakhir (km/h)",
+        ]
+    )
+    for entry in detection_logs:
+        detections_sheet.append(
+            [
+                entry["frame"],
+                entry["time_seconds"],
+                entry["tracker_id"],
+                entry["class_id"],
+                entry["confidence"],
+                entry["x1"],
+                entry["y1"],
+                entry["x2"],
+                entry["y2"],
+                entry["mode"],
+                entry["speed_kmh"],
+            ]
+        )
+    format_log_sheet(detections_sheet)
+    for column in ("B", "E"):
+        for cell in detections_sheet[column][1:]:
+            cell.number_format = "0.00"
+
+    speed_sheet = workbook.create_sheet("Kecepatan")
+    speed_sheet.append(
+        [
+            "Frame",
+            "Waktu video (detik)",
+            "Tracker ID",
+            "Segmen",
+            "Jarak (meter)",
+            "Waktu tempuh (detik)",
+            "Kecepatan (km/h)",
+        ]
+    )
+    for entry in speed_logs:
+        speed_sheet.append(
+            [
+                entry["frame"],
+                entry["time_seconds"],
+                entry["tracker_id"],
+                entry["segment"],
+                entry["distance_meters"],
+                entry["elapsed_seconds"],
+                entry["speed_kmh"],
+            ]
+        )
+    format_log_sheet(speed_sheet)
+    for column in ("B", "E", "F", "G"):
+        for cell in speed_sheet[column][1:]:
+            cell.number_format = "0.00"
+    workbook.save(target_path)
+
+
+def record_detections(
+    detection_logs: list[dict[str, Any]],
+    detections: Any,
+    frame_index: int,
+    video_fps: float,
+    mode: str,
+    speeds: dict[int, int],
+) -> None:
+    """Append the current tracked detections and their latest speeds to the log."""
+    for index, tracker_id in enumerate(detections.tracker_id):
+        tracker_key = int(tracker_id)
+        x1, y1, x2, y2 = detections.xyxy[index]
+        detection_logs.append(
+            {
+                "frame": frame_index,
+                "time_seconds": frame_index / video_fps,
+                "tracker_id": tracker_key,
+                "class_id": int(detections.class_id[index]),
+                "confidence": float(detections.confidence[index]),
+                "x1": round(float(x1), 2),
+                "y1": round(float(y1), 2),
+                "x2": round(float(x2), 2),
+                "y2": round(float(y2), 2),
+                "mode": mode,
+                "speed_kmh": speeds.get(tracker_key),
+            }
+        )
+
+
 def run_estimation(
     job_id: str,
     source_path: Path,
     target_path: Path,
+    source_video_name: str,
     mode: str,
     source_polygon: list[list[float]] | None,
     target_width: float | None,
@@ -188,6 +332,9 @@ def run_estimation(
         previous_positions: dict[int, Point] = {}
         gate_entry_states: dict[int, tuple[int, int]] = {}
         completed_speeds: dict[int, int] = {}
+        logged_speeds: dict[int, int] = {}
+        detection_logs: list[dict[str, Any]] = []
+        speed_logs: list[dict[str, Any]] = []
         frame_count = max(video_info.total_frames, 1)
 
         output_container = av.open(str(target_path), mode="w", options={"movflags": "+faststart"})
@@ -219,7 +366,22 @@ def run_estimation(
                             continue
                         distance = abs(history[-1] - history[0])
                         elapsed_time = len(history) / video_info.fps
-                        labels.append(f"#{tracker_id} {int(distance / elapsed_time * 3.6)} km/h")
+                        speed = int(distance / elapsed_time * 3.6)
+                        completed_speeds[int(tracker_id)] = speed
+                        if logged_speeds.get(int(tracker_id)) != speed:
+                            speed_logs.append(
+                                {
+                                    "frame": frame_index,
+                                    "time_seconds": frame_index / video_info.fps,
+                                    "tracker_id": int(tracker_id),
+                                    "segment": "Area poligon",
+                                    "distance_meters": distance,
+                                    "elapsed_seconds": elapsed_time,
+                                    "speed_kmh": speed,
+                                }
+                            )
+                            logged_speeds[int(tracker_id)] = speed
+                        labels.append(f"#{tracker_id} {speed} km/h")
                 else:
                     for tracker_id, point in zip(detections.tracker_id, points, strict=True):
                         tracker_key = int(tracker_id)
@@ -248,6 +410,17 @@ def run_estimation(
                                         completed_speeds[tracker_key] = int(
                                             gate_distances[distance_index] / elapsed_time * 3.6
                                         )
+                                        speed_logs.append(
+                                            {
+                                                "frame": frame_index,
+                                                "time_seconds": frame_index / video_info.fps,
+                                                "tracker_id": tracker_key,
+                                                "segment": f"Gate {chr(65 + previous_gate_index)} - Gate {chr(65 + crossed_gate_index)}",
+                                                "distance_meters": gate_distances[distance_index],
+                                                "elapsed_seconds": elapsed_time,
+                                                "speed_kmh": completed_speeds[tracker_key],
+                                            }
+                                        )
                                     gate_entry_states[tracker_key] = (crossed_gate_index, frame_index)
                         previous_positions[tracker_key] = current_position
                         speed = completed_speeds.get(tracker_key)
@@ -270,16 +443,36 @@ def run_estimation(
                             (80, 190, 80),
                             thickness,
                         )
+                record_detections(
+                    detection_logs,
+                    detections,
+                    frame_index,
+                    video_info.fps,
+                    mode,
+                    completed_speeds,
+                )
                 mux_h264_frame(output_container, output_stream, annotated_frame)
                 update_job(job_id, progress=round(frame_index / frame_count * 100))
         finally:
             finish_h264_encoding(output_container, output_stream)
+
+        log_path = LOG_DIR / f"{job_id}-detection-log.xlsx"
+        write_detection_workbook(
+            log_path,
+            source_video_name,
+            mode,
+            video_info.fps,
+            video_info.total_frames,
+            detection_logs,
+            speed_logs,
+        )
 
         update_job(
             job_id,
             status="complete",
             progress=100,
             result_url=f"/results/{target_path.name}",
+            log_url=f"/logs/{log_path.name}",
         )
     except Exception as error:
         update_job(job_id, status="error", error=str(error))
@@ -325,6 +518,7 @@ def create_job() -> tuple[Any, int] | Any:
 
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     RESULT_DIR.mkdir(parents=True, exist_ok=True)
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
     job_id = uuid.uuid4().hex
     filename = secure_filename(video.filename)
     source_path = UPLOAD_DIR / f"{job_id}-{filename}"
@@ -338,6 +532,7 @@ def create_job() -> tuple[Any, int] | Any:
             "job_id": job_id,
             "source_path": source_path,
             "target_path": target_path,
+            "source_video_name": filename,
             "mode": mode,
             "source_polygon": source_polygon,
             "target_width": target_width,
@@ -367,6 +562,12 @@ def get_job(job_id: str) -> tuple[Any, int] | Any:
 def result_file(filename: str) -> Any:
     """Serve a completed analysis video from the local results directory."""
     return send_from_directory(RESULT_DIR, filename)
+
+
+@app.get("/logs/<path:filename>")
+def log_file(filename: str) -> Any:
+    """Serve an Excel detection log from the local logs directory."""
+    return send_from_directory(LOG_DIR, filename)
 
 
 @app.errorhandler(413)
