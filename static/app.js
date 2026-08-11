@@ -6,6 +6,16 @@ const calibrationVideo = document.querySelector("#calibration-video");
 const calibrationCanvas = document.querySelector("#calibration-canvas");
 const calibrationInstruction = document.querySelector("#calibration-instruction");
 const sourcePolygon = document.querySelector("#source_polygon");
+const polygonSettings = document.querySelector("#polygon-settings");
+const gateSettings = document.querySelector("#gate-settings");
+const gateA = document.querySelector("#gate_a");
+const gateB = document.querySelector("#gate_b");
+const gateDistance = document.querySelector("#gate_distance");
+const confidence = document.querySelector("#confidence_threshold");
+const iou = document.querySelector("#iou_threshold");
+const gateConfidence = document.querySelector("#confidence_threshold_gate");
+const gateIou = document.querySelector("#iou_threshold_gate");
+const modeInputs = document.querySelectorAll('input[name="mode"]');
 const undoPointButton = document.querySelector("#undo-point");
 const resetPointsButton = document.querySelector("#reset-points");
 const submitButton = document.querySelector("#submit-button");
@@ -23,16 +33,32 @@ let calibrationPoints = [];
 let calibrationUrl;
 
 const pointNames = ["kiri atas", "kanan atas", "kanan bawah", "kiri bawah"];
+const gatePointNames = ["ujung pertama Gate A", "ujung kedua Gate A", "ujung pertama Gate B", "ujung kedua Gate B"];
+
+function selectedMode() {
+  return document.querySelector('input[name="mode"]:checked').value;
+}
+
+function setModeSettings() {
+  const isPolygonMode = selectedMode() === "polygon";
+  polygonSettings.hidden = !isPolygonMode;
+  gateSettings.hidden = isPolygonMode;
+  sourcePolygon.required = isPolygonMode;
+  gateDistance.required = !isPolygonMode;
+}
 
 function updateCalibrationControls() {
   const pointCount = calibrationPoints.length;
   undoPointButton.disabled = pointCount === 0;
   resetPointsButton.disabled = pointCount === 0;
   if (pointCount === 4) {
-    calibrationInstruction.textContent = "Empat titik tersimpan. Gunakan Ulangi titik jika area jalan perlu diperbaiki.";
+    calibrationInstruction.textContent = selectedMode() === "polygon"
+      ? "Empat sudut area jalan tersimpan. Gunakan Ulangi titik jika area perlu diperbaiki."
+      : "Dua gate tersimpan. Masukkan jarak nyata dari Gate A ke Gate B dalam meter.";
     return;
   }
-  calibrationInstruction.textContent = `Klik titik ${pointCount + 1}: ${pointNames[pointCount]}.`;
+  const names = selectedMode() === "polygon" ? pointNames : gatePointNames;
+  calibrationInstruction.textContent = `Klik titik ${pointCount + 1}: ${names[pointCount]}.`;
 }
 
 function drawCalibration() {
@@ -44,13 +70,25 @@ function drawCalibration() {
   context.strokeStyle = "#22b8a4";
   context.fillStyle = "#ecfffb";
   context.font = `${Math.max(18, calibrationCanvas.width / 45)}px system-ui`;
-  context.beginPath();
-  calibrationPoints.forEach((point, index) => {
-    if (index === 0) context.moveTo(point.x, point.y);
-    else context.lineTo(point.x, point.y);
-  });
-  if (calibrationPoints.length === 4) context.closePath();
-  context.stroke();
+  if (selectedMode() === "polygon") {
+    context.beginPath();
+    calibrationPoints.forEach((point, index) => {
+      if (index === 0) context.moveTo(point.x, point.y);
+      else context.lineTo(point.x, point.y);
+    });
+    if (calibrationPoints.length === 4) context.closePath();
+    context.stroke();
+  } else {
+    [[0, 1], [2, 3]].forEach(([startIndex, endIndex]) => {
+      const start = calibrationPoints[startIndex];
+      const end = calibrationPoints[endIndex];
+      if (!start) return;
+      context.beginPath();
+      context.moveTo(start.x, start.y);
+      if (end) context.lineTo(end.x, end.y);
+      context.stroke();
+    });
+  }
   calibrationPoints.forEach((point, index) => {
     context.beginPath();
     context.arc(point.x, point.y, Math.max(8, calibrationCanvas.width / 100), 0, Math.PI * 2);
@@ -62,7 +100,12 @@ function drawCalibration() {
 }
 
 function syncPolygonInput() {
-  sourcePolygon.value = calibrationPoints.map((point) => `${point.x},${point.y}`).join(";");
+  if (selectedMode() === "polygon") {
+    sourcePolygon.value = calibrationPoints.map((point) => `${point.x},${point.y}`).join(";");
+    return;
+  }
+  gateA.value = calibrationPoints.slice(0, 2).map((point) => `${point.x},${point.y}`).join(";");
+  gateB.value = calibrationPoints.slice(2, 4).map((point) => `${point.x},${point.y}`).join(";");
 }
 
 function resetCalibration() {
@@ -86,6 +129,7 @@ fileInput.addEventListener("change", () => {
   calibrationUrl = URL.createObjectURL(file);
   calibrationVideo.src = calibrationUrl;
   calibrationPanel.hidden = false;
+  setModeSettings();
   resetCalibration();
 });
 
@@ -93,6 +137,16 @@ calibrationVideo.addEventListener("loadedmetadata", () => {
   resizeCalibrationCanvas();
   updateCalibrationControls();
 });
+
+modeInputs.forEach((input) => {
+  input.addEventListener("change", () => {
+    setModeSettings();
+    resetCalibration();
+  });
+});
+
+gateConfidence.addEventListener("input", () => { confidence.value = gateConfidence.value; });
+gateIou.addEventListener("input", () => { iou.value = gateIou.value; });
 
 calibrationCanvas.addEventListener("pointerdown", (event) => {
   if (calibrationPoints.length === 4 || !calibrationVideo.videoWidth) return;

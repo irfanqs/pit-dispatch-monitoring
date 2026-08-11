@@ -68,6 +68,13 @@ button:disabled { cursor: wait; opacity: 0.65; }
 .calibration-heading h2 { margin-bottom: 0; font-size: clamp(1.5rem, 3vw, 2.15rem); }
 .calibration-heading p, .calibration-help { margin: 8px 0 0; color: var(--muted); line-height: 1.55; }
 .calibration-actions { display: flex; gap: 10px; }
+.mode-selector { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 0 0 18px; padding: 0; border: 0; }
+.mode-selector legend { margin-bottom: 10px; font-size: 0.9rem; font-weight: 700; }
+.mode-option { display: grid; grid-template-columns: auto 1fr; align-items: center; column-gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: 9px; cursor: pointer; }
+.mode-option:has(input:checked) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.mode-option input { grid-row: span 2; accent-color: var(--accent); }
+.mode-option span { font-weight: 750; }
+.mode-option small { grid-column: 2; margin-top: 3px; }
 .secondary-button { min-width: auto; margin: 0; color: var(--accent); background: transparent; border-color: var(--line); }
 .secondary-button:hover { color: var(--surface); background: var(--accent); border-color: var(--accent); }
 .video-calibrator { position: relative; overflow: hidden; border-radius: 9px; background: #111; }
@@ -96,6 +103,7 @@ video { width: 100%; display: block; border-radius: 9px; background: #111; }
   .action-row, .result-heading, .calibration-heading { align-items: stretch; flex-direction: column; }
   .calibration-actions { flex-direction: column; }
   .calibration-actions button { width: 100%; }
+  .mode-selector { grid-template-columns: 1fr; }
   .action-row button, .download-link { width: 100%; text-align: center; }
 }
 
