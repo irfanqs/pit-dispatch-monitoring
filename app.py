@@ -89,6 +89,22 @@ def update_job(job_id: str, **values: Any) -> None:
         jobs[job_id].update(values)
 
 
+def mux_h264_frame(output_container: Any, output_stream: Any, frame: Any) -> None:
+    """Encode one BGR frame into a browser-compatible H.264 video stream."""
+    import av
+
+    video_frame = av.VideoFrame.from_ndarray(frame, format="bgr24")
+    for packet in output_stream.encode(video_frame):
+        output_container.mux(packet)
+
+
+def finish_h264_encoding(output_container: Any, output_stream: Any) -> None:
+    """Flush delayed H.264 frames and close the output container safely."""
+    for packet in output_stream.encode():
+        output_container.mux(packet)
+    output_container.close()
+
+
 def run_estimation(
     job_id: str,
     source_path: Path,
@@ -108,6 +124,7 @@ def run_estimation(
         import cv2
         import numpy as np
         import supervision as sv
+        import av
         from ultralytics import YOLO
 
         video_info = sv.VideoInfo.from_video_path(video_path=str(source_path))
@@ -159,7 +176,12 @@ def run_estimation(
         completed_speeds: dict[int, int] = {}
         frame_count = max(video_info.total_frames, 1)
 
-        with sv.VideoSink(str(target_path), video_info) as sink:
+        output_container = av.open(str(target_path), mode="w", options={"movflags": "+faststart"})
+        output_stream = output_container.add_stream("libx264", rate=round(video_info.fps))
+        output_stream.width, output_stream.height = video_info.resolution_wh
+        output_stream.pix_fmt = "yuv420p"
+        output_stream.options = {"crf": "23", "preset": "veryfast"}
+        try:
             for frame_index, frame in enumerate(
                 sv.get_video_frames_generator(source_path=str(source_path)), start=1
             ):
@@ -210,8 +232,10 @@ def run_estimation(
                     gate_b_end = tuple(map(int, gate_b[1]))
                     cv2.line(annotated_frame, gate_a_start, gate_a_end, (80, 190, 80), thickness)
                     cv2.line(annotated_frame, gate_b_start, gate_b_end, (80, 190, 80), thickness)
-                sink.write_frame(annotated_frame)
+                mux_h264_frame(output_container, output_stream, annotated_frame)
                 update_job(job_id, progress=round(frame_index / frame_count * 100))
+        finally:
+            finish_h264_encoding(output_container, output_stream)
 
         update_job(
             job_id,
