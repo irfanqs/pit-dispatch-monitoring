@@ -372,6 +372,7 @@ def run_estimation(
         tracker = sv.ByteTrack(
             frame_rate=video_info.fps,
             track_activation_threshold=confidence_threshold,
+            lost_track_buffer=120 if bg_detector is not None else 30,
         )
         thickness = sv.calculate_optimal_line_thickness(video_info.resolution_wh)
         text_scale = sv.calculate_optimal_text_scale(video_info.resolution_wh)
@@ -390,6 +391,7 @@ def run_estimation(
             lambda: deque(maxlen=max(1, int(video_info.fps)))
         )
         previous_positions: dict[int, Point] = {}
+        smoothed_positions: dict[int, Point] = {}
         gate_entry_states: dict[int, tuple[int, int]] = {}
         completed_speeds: dict[int, int] = {}
         logged_speeds: dict[int, int] = {}
@@ -419,6 +421,21 @@ def run_estimation(
                     detections = detections[polygon_zone.trigger(detections)]
                 detections = tracker.update_with_detections(detections=detections)
                 points = detections.get_anchors_coordinates(sv.Position.BOTTOM_CENTER)
+                if bg_detector is not None:
+                    smoothed = []
+                    for tracker_id, point in zip(detections.tracker_id, points, strict=True):
+                        tracker_key = int(tracker_id)
+                        previous_smoothed = smoothed_positions.get(tracker_key)
+                        if previous_smoothed is None:
+                            current = (float(point[0]), float(point[1]))
+                        else:
+                            current = (
+                                previous_smoothed[0] * 0.5 + float(point[0]) * 0.5,
+                                previous_smoothed[1] * 0.5 + float(point[1]) * 0.5,
+                            )
+                        smoothed_positions[tracker_key] = current
+                        smoothed.append(current)
+                    points = np.asarray(smoothed, dtype=np.float64)
 
                 labels = []
                 if mode == "polygon":
@@ -468,9 +485,8 @@ def run_estimation(
                                 gate_entry_states[tracker_key] = (crossed_gate_index, frame_index)
                             elif crossed_gate_index is not None and entry_state is not None:
                                 previous_gate_index = entry_state[0]
-                                if abs(previous_gate_index - crossed_gate_index) != 1:
-                                    gate_entry_states[tracker_key] = (crossed_gate_index, frame_index)
-                                else:
+                                gate_distance_index = abs(previous_gate_index - crossed_gate_index)
+                                if gate_distance_index == 1:
                                     elapsed_time = (frame_index - entry_state[1]) / video_info.fps
                                     if elapsed_time > 0:
                                         distance_index = min(previous_gate_index, crossed_gate_index)
@@ -488,6 +504,10 @@ def run_estimation(
                                                 "speed_kmh": completed_speeds[tracker_key],
                                             }
                                         )
+                                    gate_entry_states[tracker_key] = (crossed_gate_index, frame_index)
+                                elif gate_distance_index > 1:
+                                    gate_entry_states[tracker_key] = (crossed_gate_index, frame_index)
+                                else:
                                     gate_entry_states[tracker_key] = (crossed_gate_index, frame_index)
                         previous_positions[tracker_key] = current_position
                         speed = completed_speeds.get(tracker_key)
