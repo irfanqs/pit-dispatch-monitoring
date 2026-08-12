@@ -19,6 +19,19 @@ RESULT_DIR = BASE_DIR / "data" / "results"
 LOG_DIR = BASE_DIR / "data" / "logs"
 ALLOWED_EXTENSIONS = {"mp4", "mov", "avi", "mkv", "m4v"}
 DEFAULT_SOURCE = "1252,787;2298,803;5039,2159;-550,2159"
+BG_SUB_DEFAULTS = {
+    "history": 500,
+    "var_threshold": 50,
+    "warmup_frames": 300,
+    "sky_fraction": 0.15,
+    "bottom_fraction": 0.85,
+    "min_area": 300,
+    "max_area": 8000,
+    "min_aspect": 0.5,
+    "max_aspect": 3.5,
+    "min_solidity": 0.40,
+    "merge_dist": 60,
+}
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024 * 1024
@@ -263,6 +276,39 @@ def record_detections(
         )
 
 
+def parse_bg_sub_config(form_data: dict[str, Any]) -> dict[str, float | int]:
+    """Parse and validate background subtraction settings from form data."""
+    config: dict[str, float | int] = {}
+    for key, default in BG_SUB_DEFAULTS.items():
+        raw = form_data.get(key, "").strip()
+        try:
+            value = float(raw) if raw else float(default)
+        except (TypeError, ValueError) as error:
+            raise ValueError(f"Nilai {key} tidak valid.") from error
+        if key in ("history", "warmup_frames"):
+            value = int(value)
+            if value < 0:
+                raise ValueError(f"{key} harus lebih besar dari atau sama dengan nol.")
+        elif key in ("min_area", "var_threshold") and value <= 0:
+            raise ValueError(f"{key} harus lebih besar dari nol.")
+        elif key in ("sky_fraction", "bottom_fraction", "min_solidity") and not 0 <= value <= 1:
+            raise ValueError(f"{key} harus berada dalam rentang 0 sampai 1.")
+        elif key == "min_aspect" and value <= 0:
+            raise ValueError(f"{key} harus lebih besar dari nol.")
+        elif key == "max_area" and value <= 0:
+            raise ValueError(f"{key} harus lebih besar dari nol.")
+        elif key == "merge_dist" and value < 0:
+            raise ValueError(f"{key} harus lebih besar dari atau sama dengan nol.")
+        config[key] = value
+    if config["min_area"] >= config["max_area"]:
+        raise ValueError("min_area harus lebih kecil dari max_area.")
+    if config["min_aspect"] >= config["max_aspect"]:
+        raise ValueError("min_aspect harus lebih kecil dari max_aspect.")
+    if config["sky_fraction"] >= config["bottom_fraction"]:
+        raise ValueError("sky_fraction harus lebih kecil dari bottom_fraction.")
+    return config
+
+
 def run_estimation(
     job_id: str,
     source_path: Path,
@@ -276,6 +322,8 @@ def run_estimation(
     gate_distances: list[float] | None,
     confidence_threshold: float,
     iou_threshold: float,
+    detector: str = "yolo",
+    bg_sub_config: dict[str, float | int] | None = None,
 ) -> None:
     """Run detection, tracking, and speed annotation for one uploaded video."""
     try:
@@ -283,7 +331,6 @@ def run_estimation(
         import numpy as np
         import supervision as sv
         import av
-        from ultralytics import YOLO
 
         video_info = sv.VideoInfo.from_video_path(video_path=str(source_path))
         if mode == "polygon":
@@ -308,7 +355,20 @@ def run_estimation(
             polygon_zone = None
         else:
             raise ValueError("Metode pengukuran tidak dikenali.")
-        model = YOLO("yolo11x.pt")
+
+        model = None
+        bg_detector = None
+        if detector == "yolo":
+            from ultralytics import YOLO
+
+            model = YOLO("yolo11x.pt")
+        elif detector == "bg":
+            from bg_subtraction import BgSubDetector
+
+            bg_detector = BgSubDetector(**(bg_sub_config or {}))
+        else:
+            raise ValueError("Metode deteksi tidak dikenali.")
+
         tracker = sv.ByteTrack(
             frame_rate=video_info.fps,
             track_activation_threshold=confidence_threshold,
@@ -346,8 +406,15 @@ def run_estimation(
             for frame_index, frame in enumerate(
                 sv.get_video_frames_generator(source_path=str(source_path)), start=1
             ):
-                result = model(frame, conf=confidence_threshold, iou=iou_threshold, verbose=False)[0]
-                detections = sv.Detections.from_ultralytics(result)
+                if bg_detector is not None:
+                    detections = bg_detector.process(frame)
+                    if detections is None:
+                        mux_h264_frame(output_container, output_stream, frame)
+                        update_job(job_id, progress=round(frame_index / frame_count * 100))
+                        continue
+                else:
+                    result = model(frame, conf=confidence_threshold, iou=iou_threshold, verbose=False)[0]
+                    detections = sv.Detections.from_ultralytics(result)
                 if polygon_zone is not None:
                     detections = detections[polygon_zone.trigger(detections)]
                 detections = tracker.update_with_detections(detections=detections)
@@ -494,8 +561,11 @@ def create_job() -> tuple[Any, int] | Any:
         return jsonify(error="Format video tidak didukung."), 400
     try:
         mode = request.form.get("mode", "polygon")
+        detector = request.form.get("detector", "yolo")
         confidence_threshold = float(request.form["confidence_threshold"])
         iou_threshold = float(request.form["iou_threshold"])
+        if detector not in {"yolo", "bg"}:
+            raise ValueError("Metode deteksi tidak dikenali.")
         if not 0 < confidence_threshold <= 1 or not 0 < iou_threshold <= 1:
             raise ValueError("Nilai konfigurasi harus berada dalam rentang yang valid.")
         source_polygon = None
@@ -503,6 +573,9 @@ def create_job() -> tuple[Any, int] | Any:
         target_height = None
         gates = None
         gate_distances = None
+        bg_sub_config = None
+        if detector == "bg":
+            bg_sub_config = parse_bg_sub_config(request.form)
         if mode == "polygon":
             source_polygon = parse_polygon(request.form["source_polygon"])
             target_width = float(request.form["target_width"])
@@ -541,6 +614,8 @@ def create_job() -> tuple[Any, int] | Any:
             "gate_distances": gate_distances,
             "confidence_threshold": confidence_threshold,
             "iou_threshold": iou_threshold,
+            "detector": detector,
+            "bg_sub_config": bg_sub_config,
         },
         daemon=True,
     )
