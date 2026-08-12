@@ -36,11 +36,12 @@
             <div class="calibration-heading">
               <div>
                 <span class="kicker">Kalibrasi visual</span>
-                <h2 id="calibration-title">Klik empat sudut area jalan</h2>
+                <h2 id="calibration-title">Tentukan koridor dan lintasan jalan</h2>
                 <p id="calibration-instruction">Pilih video terlebih dahulu.</p>
               </div>
               <div class="calibration-actions">
                 <button id="undo-point" type="button" class="secondary-button" disabled>Hapus titik terakhir</button>
+                <button id="finish-points" type="button" class="secondary-button" disabled>Selesai bentuk</button>
                 <button id="reset-points" type="button" class="secondary-button" disabled>Ulangi titik</button>
               </div>
             </div>
@@ -62,7 +63,7 @@
               <canvas id="calibration-canvas" aria-label="Area untuk memilih empat titik kalibrasi"></canvas>
             </div>
             <p id="preview-status" class="preview-status" aria-live="polite">Memuat preview video.</p>
-            <p class="calibration-help">Pilih berurutan: kiri atas, kanan atas, kanan bawah, lalu kiri bawah. Anda dapat menjeda video pada frame yang paling jelas.</p>
+            <p class="calibration-help">Mode Koridor & Lintasan: buat batas jalan dengan banyak titik, lalu klik garis tengah jalan yang mengikuti tikungan. Titik tengah-bawah kendaraan harus berada di koridor dan dekat lintasan agar speed dihitung.</p>
           </section>
 
           <section id="measurement-settings" hidden>
@@ -127,18 +128,22 @@
             </div>
 
             <div id="polygon-settings" class="settings" aria-label="Konfigurasi poligon">
+              <input id="corridor_polygon" name="corridor_polygon" type="hidden" required>
+              <input id="route_points" name="route_points" type="hidden" required>
               <div class="setting setting-wide">
-                <label for="source_polygon">Area jalan</label>
-                <input id="source_polygon" name="source_polygon" value="{{ default_source }}" required>
-                <small>Terisi otomatis setelah empat titik dipilih. Anda tetap dapat memasukkan koordinat secara manual.</small>
+                <label for="corridor_display">Koridor jalan</label>
+                <input id="corridor_display" readonly>
+                <small>Minimal 3 titik. Klik mengikuti kedua sisi jalan, lalu tekan “Selesai bentuk”.</small>
+              </div>
+              <div class="setting setting-wide">
+                <label for="route_display">Lintasan tengah</label>
+                <input id="route_display" readonly>
+                <small>Minimal 2 titik. Ikuti pusat jalur sesuai arah jalan lalu tekan “Selesai bentuk”.</small>
               </div>
               <div class="setting">
-                <label for="target_width">Lebar target</label>
-                <input id="target_width" name="target_width" type="number" min="1" value="25" required>
-              </div>
-              <div class="setting">
-                <label for="target_height">Panjang target</label>
-                <input id="target_height" name="target_height" type="number" min="1" value="250" required>
+                <label for="route_length_meters">Panjang lintasan (meter)</label>
+                <input id="route_length_meters" name="route_length_meters" type="number" min="0.1" step="0.1" placeholder="Contoh: 180" required>
+                <small>Jarak nyata mengikuti tikungan, bukan jarak lurus.</small>
               </div>
               <div class="setting yolo-only">
                 <label for="confidence_threshold">Confidence</label>

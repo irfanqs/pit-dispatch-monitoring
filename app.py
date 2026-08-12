@@ -46,15 +46,38 @@ def allowed_video(filename: str) -> bool:
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
-def parse_polygon(value: str) -> list[list[float]]:
-    """Parse four x,y coordinate pairs entered in the calibration field."""
+def parse_points(value: str, name: str, minimum: int, maximum: int | None = None) -> list[list[float]]:
+    """Parse a semicolon-separated list of x,y coordinate pairs."""
     points = []
     for pair in value.split(";"):
-        x_value, y_value = pair.strip().split(",")
+        x_value, y_value = pair.strip().split(",", maxsplit=1)
         points.append([float(x_value), float(y_value)])
-    if len(points) != 4:
-        raise ValueError("Area jalan harus berisi tepat empat titik koordinat.")
+    if len(points) < minimum or (maximum is not None and len(points) > maximum):
+        expected = f"{minimum}" if maximum == minimum else f"minimal {minimum}"
+        raise ValueError(f"{name} harus berisi {expected} titik koordinat.")
     return points
+
+
+def project_to_polyline(point: Point, polyline: list[Point]) -> tuple[float, float]:
+    """Return distance along a polyline and the point's nearest offset in pixels."""
+    import math
+
+    best_distance = 0.0
+    best_offset = float("inf")
+    travelled = 0.0
+    for start, end in zip(polyline, polyline[1:]):
+        delta_x, delta_y = end[0] - start[0], end[1] - start[1]
+        segment_length = math.hypot(delta_x, delta_y)
+        if segment_length == 0:
+            continue
+        ratio = max(0.0, min(1.0, ((point[0] - start[0]) * delta_x + (point[1] - start[1]) * delta_y) / segment_length**2))
+        projected_x, projected_y = start[0] + ratio * delta_x, start[1] + ratio * delta_y
+        offset = math.hypot(point[0] - projected_x, point[1] - projected_y)
+        if offset < best_offset:
+            best_offset = offset
+            best_distance = travelled + ratio * segment_length
+        travelled += segment_length
+    return best_distance, best_offset
 
 
 def parse_gate_definitions(value: str) -> tuple[list[tuple[Point, Point]], list[float]]:
@@ -316,7 +339,9 @@ def run_estimation(
     target_path: Path,
     source_video_name: str,
     mode: str,
-    source_polygon: list[list[float]] | None,
+    corridor_polygon: list[list[float]] | None,
+    route_points: list[list[float]] | None,
+    route_length_meters: float | None,
     target_width: float | None,
     target_height: float | None,
     gates: list[tuple[Point, Point]] | None,
@@ -335,25 +360,20 @@ def run_estimation(
 
         video_info = sv.VideoInfo.from_video_path(video_path=str(source_path))
         if mode == "polygon":
-            if source_polygon is None or target_width is None or target_height is None:
-                raise ValueError("Kalibrasi poligon belum lengkap.")
-            source = np.array(source_polygon, dtype=np.float32)
-            target = np.array(
-                [
-                    [0, 0],
-                    [target_width - 1, 0],
-                    [target_width - 1, target_height - 1],
-                    [0, target_height - 1],
-                ],
-                dtype=np.float32,
+            if corridor_polygon is None or route_points is None or route_length_meters is None:
+                raise ValueError("Koridor atau lintasan belum lengkap.")
+            corridor = np.array(corridor_polygon, dtype=np.int32)
+            route = [(float(x), float(y)) for x, y in route_points]
+            route_pixel_total = sum(
+                float(np.linalg.norm(np.subtract(end, start)))
+                for start, end in zip(route, route[1:])
             )
-            matrix = cv2.getPerspectiveTransform(source, target)
-            polygon_zone = sv.PolygonZone(polygon=source)
+            if route_pixel_total <= 0:
+                raise ValueError("Lintasan harus memiliki panjang lebih dari nol.")
+            meters_per_route_pixel = route_length_meters / route_pixel_total
         elif mode == "gate":
             if gates is None or gate_distances is None:
                 raise ValueError("Kalibrasi gate belum lengkap.")
-            matrix = None
-            polygon_zone = None
         else:
             raise ValueError("Metode pengukuran tidak dikenali.")
 
@@ -392,7 +412,7 @@ def run_estimation(
             text_thickness=thickness,
             text_position=sv.Position.BOTTOM_CENTER,
         )
-        coordinates: defaultdict[int, deque[int]] = defaultdict(
+        coordinates: defaultdict[int, deque[tuple[int, float]]] = defaultdict(
             lambda: deque(maxlen=max(1, int(video_info.fps)))
         )
         previous_positions: dict[int, Point] = {}
@@ -422,8 +442,12 @@ def run_estimation(
                 else:
                     result = model(frame, conf=confidence_threshold, iou=iou_threshold, verbose=False)[0]
                     detections = sv.Detections.from_ultralytics(result)
-                if polygon_zone is not None:
-                    detections = detections[polygon_zone.trigger(detections)]
+                if mode == "polygon" and len(detections):
+                    anchors = detections.get_anchors_coordinates(sv.Position.BOTTOM_CENTER)
+                    inside = np.array(
+                        [cv2.pointPolygonTest(corridor, (float(point[0]), float(point[1])), False) >= 0 for point in anchors]
+                    )
+                    detections = detections[inside]
                 detections = tracker.update_with_detections(detections=detections)
                 points = detections.get_anchors_coordinates(sv.Position.BOTTOM_CENTER)
                 if bg_detector is not None:
@@ -444,17 +468,24 @@ def run_estimation(
 
                 labels = []
                 if mode == "polygon":
-                    transformed_points = cv2.perspectiveTransform(
-                        points.reshape(-1, 1, 2).astype(np.float32), matrix
-                    ).reshape(-1, 2).astype(int) if points.size else points
-                    for tracker_id, point in zip(detections.tracker_id, transformed_points, strict=True):
-                        coordinates[int(tracker_id)].append(int(point[1]))
+                    for tracker_id, point in zip(detections.tracker_id, points, strict=True):
+                        route_distance_px, route_offset_px = project_to_polyline(
+                            (float(point[0]), float(point[1])), route
+                        )
+                        if route_offset_px > 150:
+                            labels.append(f"#{tracker_id}")
+                            continue
+                        route_distance_m = route_distance_px * meters_per_route_pixel
+                        coordinates[int(tracker_id)].append((frame_index, route_distance_m))
                         history = coordinates[int(tracker_id)]
                         if len(history) < video_info.fps / 2:
                             labels.append(f"#{tracker_id}")
                             continue
-                        distance = abs(history[-1] - history[0])
-                        elapsed_time = len(history) / video_info.fps
+                        elapsed_time = (history[-1][0] - history[0][0]) / video_info.fps
+                        distance = abs(history[-1][1] - history[0][1])
+                        if elapsed_time <= 0:
+                            labels.append(f"#{tracker_id}")
+                            continue
                         speed = int(distance / elapsed_time * 3.6)
                         completed_speeds[int(tracker_id)] = speed
                         if logged_speeds.get(int(tracker_id)) != speed:
@@ -535,6 +566,15 @@ def run_estimation(
                             (80, 190, 80),
                             thickness,
                         )
+                elif mode == "polygon":
+                    cv2.polylines(annotated_frame, [corridor], True, (80, 190, 80), thickness)
+                    cv2.polylines(
+                        annotated_frame,
+                        [np.asarray(route, dtype=np.int32)],
+                        False,
+                        (80, 190, 80),
+                        thickness,
+                    )
                 record_detections(
                     detection_logs,
                     detections,
@@ -593,20 +633,20 @@ def create_job() -> tuple[Any, int] | Any:
             raise ValueError("Metode deteksi tidak dikenali.")
         if not 0 < confidence_threshold <= 1 or not 0 < iou_threshold <= 1:
             raise ValueError("Nilai konfigurasi harus berada dalam rentang yang valid.")
-        source_polygon = None
-        target_width = None
-        target_height = None
+        corridor_polygon = None
+        route_points = None
+        route_length_meters = None
         gates = None
         gate_distances = None
         bg_sub_config = None
         if detector == "bg":
             bg_sub_config = parse_bg_sub_config(request.form)
         if mode == "polygon":
-            source_polygon = parse_polygon(request.form["source_polygon"])
-            target_width = float(request.form["target_width"])
-            target_height = float(request.form["target_height"])
-            if min(target_width, target_height) <= 0:
-                raise ValueError("Ukuran target harus lebih besar dari nol.")
+            corridor_polygon = parse_points(request.form["corridor_polygon"], "Koridor jalan", 3)
+            route_points = parse_points(request.form["route_points"], "Lintasan tengah", 2)
+            route_length_meters = float(request.form["route_length_meters"])
+            if route_length_meters <= 0:
+                raise ValueError("Panjang lintasan harus lebih besar dari nol.")
         elif mode == "gate":
             gates, gate_distances = parse_gate_definitions(request.form["gate_definitions"])
         else:
@@ -632,9 +672,9 @@ def create_job() -> tuple[Any, int] | Any:
             "target_path": target_path,
             "source_video_name": filename,
             "mode": mode,
-            "source_polygon": source_polygon,
-            "target_width": target_width,
-            "target_height": target_height,
+            "corridor_polygon": corridor_polygon,
+            "route_points": route_points,
+            "route_length_meters": route_length_meters,
             "gates": gates,
             "gate_distances": gate_distances,
             "confidence_threshold": confidence_threshold,

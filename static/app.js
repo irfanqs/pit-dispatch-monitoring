@@ -6,7 +6,10 @@ const calibrationVideo = document.querySelector("#calibration-video");
 const calibrationCanvas = document.querySelector("#calibration-canvas");
 const previewStatus = document.querySelector("#preview-status");
 const calibrationInstruction = document.querySelector("#calibration-instruction");
-const sourcePolygon = document.querySelector("#source_polygon");
+const corridorPolygon = document.querySelector("#corridor_polygon");
+const routePointsInput = document.querySelector("#route_points");
+const corridorDisplay = document.querySelector("#corridor_display");
+const routeDisplay = document.querySelector("#route_display");
 const polygonSettings = document.querySelector("#polygon-settings");
 const gateSettings = document.querySelector("#gate-settings");
 const measurementSettings = document.querySelector("#measurement-settings");
@@ -21,6 +24,7 @@ const modeInputs = document.querySelectorAll('input[name="mode"]');
 const detectorInputs = document.querySelectorAll('input[name="detector"]');
 const bgSettings = document.querySelector("#bg-settings");
 const undoPointButton = document.querySelector("#undo-point");
+const finishPointsButton = document.querySelector("#finish-points");
 const resetPointsButton = document.querySelector("#reset-points");
 const submitButton = document.querySelector("#submit-button");
 const statusPanel = document.querySelector("#status-panel");
@@ -35,6 +39,9 @@ const downloadLogLink = document.querySelector("#download-log-link");
 const errorPanel = document.querySelector("#error-panel");
 const errorMessage = document.querySelector("#error-message");
 let calibrationPoints = [];
+let corridorPoints = [];
+let routePoints = [];
+let polygonStep = "corridor";
 let calibrationUrl;
 let gateCount = 2;
 let gateDistances = [""];
@@ -48,7 +55,8 @@ function setModeSettings() {
   const isPolygonMode = selectedMode() === "polygon";
   polygonSettings.hidden = !isPolygonMode;
   gateSettings.hidden = isPolygonMode;
-  sourcePolygon.required = isPolygonMode;
+  corridorPolygon.required = isPolygonMode;
+  routePointsInput.required = isPolygonMode;
   gateDefinitions.required = !isPolygonMode;
 }
 
@@ -118,18 +126,24 @@ function resetGateConfiguration() {
 }
 
 function updateCalibrationControls() {
-  const pointCount = calibrationPoints.length;
-  const requiredPointCount = selectedMode() === "polygon" ? 4 : gateCount * 2;
-  undoPointButton.disabled = pointCount === 0;
-  resetPointsButton.disabled = pointCount === 0;
-  if (pointCount === requiredPointCount) {
-    calibrationInstruction.textContent = selectedMode() === "polygon"
-      ? "Empat sudut area jalan tersimpan. Gunakan Ulangi titik jika area perlu diperbaiki."
-      : "Semua gate tersimpan. Masukkan jarak nyata untuk setiap pasangan gate yang berurutan.";
+  if (selectedMode() === "polygon") {
+    const activePoints = polygonStep === "corridor" ? corridorPoints : routePoints;
+    undoPointButton.disabled = activePoints.length === 0;
+    resetPointsButton.disabled = corridorPoints.length === 0 && routePoints.length === 0;
+    finishPointsButton.hidden = false;
+    finishPointsButton.disabled = polygonStep === "done" || activePoints.length < (polygonStep === "corridor" ? 3 : 2);
+    if (polygonStep === "corridor") calibrationInstruction.textContent = "Klik titik-titik batas koridor jalan. Ikuti kedua sisi jalan hingga membentuk area tertutup, lalu tekan Selesai bentuk.";
+    else if (polygonStep === "route") calibrationInstruction.textContent = "Klik titik-titik garis tengah lintasan mengikuti tikungan, lalu tekan Selesai bentuk.";
+    else calibrationInstruction.textContent = "Koridor dan lintasan tersimpan. Masukkan panjang lintasan nyata dalam meter.";
     return;
   }
-  if (selectedMode() === "polygon") {
-    calibrationInstruction.textContent = `Klik titik ${pointCount + 1}: ${pointNames[pointCount]}.`;
+  const pointCount = calibrationPoints.length;
+  const requiredPointCount = gateCount * 2;
+  undoPointButton.disabled = pointCount === 0;
+  resetPointsButton.disabled = pointCount === 0;
+  finishPointsButton.hidden = true;
+  if (pointCount === requiredPointCount) {
+    calibrationInstruction.textContent = "Semua gate tersimpan. Masukkan jarak nyata untuk setiap pasangan gate yang berurutan.";
     return;
   }
   const gateIndex = Math.floor(pointCount / 2);
@@ -140,7 +154,7 @@ function updateCalibrationControls() {
 function drawCalibration() {
   const context = calibrationCanvas.getContext("2d");
   context.clearRect(0, 0, calibrationCanvas.width, calibrationCanvas.height);
-  if (!calibrationPoints.length) return;
+  if (!calibrationPoints.length && !corridorPoints.length && !routePoints.length) return;
 
   context.lineWidth = Math.max(3, calibrationCanvas.width / 600);
   context.strokeStyle = "#22b8a4";
@@ -148,11 +162,18 @@ function drawCalibration() {
   context.font = `${Math.max(18, calibrationCanvas.width / 45)}px system-ui`;
   if (selectedMode() === "polygon") {
     context.beginPath();
-    calibrationPoints.forEach((point, index) => {
+    corridorPoints.forEach((point, index) => {
       if (index === 0) context.moveTo(point.x, point.y);
       else context.lineTo(point.x, point.y);
     });
-    if (calibrationPoints.length === 4) context.closePath();
+    if (corridorPoints.length >= 3) context.closePath();
+    context.stroke();
+    context.beginPath();
+    routePoints.forEach((point, index) => {
+      if (index === 0) context.moveTo(point.x, point.y);
+      else context.lineTo(point.x, point.y);
+    });
+    context.strokeStyle = "#f0ad4e";
     context.stroke();
   } else {
     Array.from({ length: gateCount }, (_, index) => index).forEach((index) => {
@@ -165,7 +186,8 @@ function drawCalibration() {
       context.stroke();
     });
   }
-  calibrationPoints.forEach((point, index) => {
+  const activePoints = selectedMode() === "polygon" ? [...corridorPoints, ...routePoints] : calibrationPoints;
+  activePoints.forEach((point, index) => {
     context.beginPath();
     context.arc(point.x, point.y, Math.max(8, calibrationCanvas.width / 100), 0, Math.PI * 2);
     context.fillStyle = "#006f62";
@@ -177,7 +199,11 @@ function drawCalibration() {
 
 function syncCalibrationInput() {
   if (selectedMode() === "polygon") {
-    sourcePolygon.value = calibrationPoints.map((point) => `${point.x},${point.y}`).join(";");
+    const serialize = (points) => points.map((point) => `${point.x},${point.y}`).join(";");
+    corridorPolygon.value = serialize(corridorPoints);
+    routePointsInput.value = serialize(routePoints);
+    corridorDisplay.value = corridorPolygon.value;
+    routeDisplay.value = routePointsInput.value;
     return;
   }
   if (calibrationPoints.length !== gateCount * 2 || gateDistances.some((distance) => Number(distance) <= 0)) {
@@ -194,7 +220,9 @@ function syncCalibrationInput() {
 }
 
 function resetCalibration() {
-  calibrationPoints = [];
+  corridorPoints = [];
+  routePoints = [];
+  polygonStep = "corridor";
   syncCalibrationInput();
   if (selectedMode() === "gate") renderGateList();
   drawCalibration();
@@ -266,13 +294,16 @@ gateIou.addEventListener("input", () => { iou.value = gateIou.value; });
 
 calibrationCanvas.addEventListener("pointerdown", (event) => {
   const requiredPointCount = selectedMode() === "polygon" ? 4 : gateCount * 2;
-  if (calibrationPoints.length === requiredPointCount || !calibrationVideo.videoWidth) return;
+  if ((selectedMode() === "gate" && calibrationPoints.length === requiredPointCount) || !calibrationVideo.videoWidth) return;
   const bounds = calibrationCanvas.getBoundingClientRect();
   const point = {
     x: Math.round((event.clientX - bounds.left) * calibrationCanvas.width / bounds.width),
     y: Math.round((event.clientY - bounds.top) * calibrationCanvas.height / bounds.height),
   };
-  calibrationPoints.push(point);
+  if (selectedMode() === "polygon") {
+    if (polygonStep === "corridor") corridorPoints.push(point);
+    else if (polygonStep === "route") routePoints.push(point);
+  } else calibrationPoints.push(point);
   syncCalibrationInput();
   if (selectedMode() === "gate") renderGateList();
   drawCalibration();
@@ -280,7 +311,10 @@ calibrationCanvas.addEventListener("pointerdown", (event) => {
 });
 
 undoPointButton.addEventListener("click", () => {
-  calibrationPoints.pop();
+  if (selectedMode() === "polygon") {
+    if (polygonStep === "corridor") corridorPoints.pop();
+    else if (polygonStep === "route") routePoints.pop();
+  } else calibrationPoints.pop();
   syncCalibrationInput();
   if (selectedMode() === "gate") renderGateList();
   drawCalibration();
@@ -288,6 +322,15 @@ undoPointButton.addEventListener("click", () => {
 });
 
 resetPointsButton.addEventListener("click", resetCalibration);
+
+finishPointsButton.addEventListener("click", () => {
+  if (selectedMode() !== "polygon") return;
+  if (polygonStep === "corridor" && corridorPoints.length >= 3) polygonStep = "route";
+  else if (polygonStep === "route" && routePoints.length >= 2) polygonStep = "done";
+  syncCalibrationInput();
+  drawCalibration();
+  updateCalibrationControls();
+});
 
 addGateButton.addEventListener("click", () => {
   gateCount += 1;
