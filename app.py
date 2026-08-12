@@ -342,8 +342,6 @@ def run_estimation(
     corridor_polygon: list[list[float]] | None,
     route_points: list[list[float]] | None,
     route_length_meters: float | None,
-    target_width: float | None,
-    target_height: float | None,
     gates: list[tuple[Point, Point]] | None,
     gate_distances: list[float] | None,
     confidence_threshold: float,
