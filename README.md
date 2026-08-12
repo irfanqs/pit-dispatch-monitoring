@@ -66,9 +66,9 @@ https://github.com/roboflow/supervision/assets/26109316/d50118c1-2ae4-458d-915a-
 
 ### web UI
 
-Siapkan environment lalu jalankan antarmuka web lokal dengan model ringan
-`yolo11n.pt` (atau mode deteksi Background Subtraction yang tidak memerlukan
-model):
+Siapkan environment lalu jalankan antarmuka web lokal dengan model hauler
+fine-tuned lokal `truck-hauler-ft.pt` (atau mode deteksi Background
+Subtraction yang tidak memerlukan model):
 
 ```bash
 python3.11 -m venv .venv
@@ -92,8 +92,9 @@ area jalan, kemudian pilih metode pengukuran:
 
 Selain itu, pilih **metode deteksi objek**:
 
-- **YOLO** (bawaan): deteksi deep learning menggunakan `yolo11x.pt`. Mengenal
-  kelas objek (mobil, truk, bus) dan membutuhkan konfigurasi confidence/IoU.
+- **YOLO** (bawaan): deteksi deep learning menggunakan `truck-hauler-ft.pt`,
+  model fine-tuned satu kelas `hauler`, dan membutuhkan konfigurasi
+  confidence/IoU.
 - **Background Subtraction**: pendekatan klasik berbasis MOG2 tanpa model deep
   learning. Sangat cepat dan mampu menangkap objek bergerak kecil (misalnya
   hauler yang tampak jauh), cocok untuk kamera statis. Gunakan **Frame warmup**
@@ -103,8 +104,7 @@ Selain itu, pilih **metode deteksi objek**:
   sensitivitas MOG2 (`var_threshold`) dan `history`.
 
 Hasil akan tersedia untuk diputar dan diunduh dari halaman tersebut. Koordinat
-bawaan hanya sesuai untuk video contoh `vehicles.mp4`. Bobot `yolo11n.pt`
-diunduh otomatis ketika analisis pertama dimulai.
+bawaan hanya sesuai untuk video contoh `vehicles.mp4`.
 
 Setiap analisis juga menghasilkan log Excel yang dapat diunduh dari halaman
 hasil. Workbook berisi ringkasan, seluruh deteksi ter-track per frame, dan

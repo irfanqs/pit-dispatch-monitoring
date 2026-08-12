@@ -343,7 +343,7 @@ form.addEventListener("submit", async (event) => {
   statusLabel.textContent = "Mengunggah dan menyiapkan analisis";
   statusDetail.textContent = selectedDetector() === "bg"
     ? "Video sedang diproses dengan background subtraction."
-    : "Video sedang diproses dengan yolo11n.pt.";
+    : "Video sedang diproses dengan model hauler fine-tuned.";
   progressValue.textContent = "0%";
   progressBar.style.width = "0%";
   submitButton.disabled = true;

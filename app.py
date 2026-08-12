@@ -19,6 +19,7 @@ RESULT_DIR = BASE_DIR / "data" / "results"
 LOG_DIR = BASE_DIR / "data" / "logs"
 ALLOWED_EXTENSIONS = {"mp4", "mov", "avi", "mkv", "m4v"}
 DEFAULT_SOURCE = "1252,787;2298,803;5039,2159;-550,2159"
+YOLO_MODEL_PATH = BASE_DIR / "truck-hauler-ft.pt"
 BG_SUB_DEFAULTS = {
     "history": 500,
     "var_threshold": 50,
@@ -361,7 +362,11 @@ def run_estimation(
         if detector == "yolo":
             from ultralytics import YOLO
 
-            model = YOLO("yolo11x.pt")
+            if not YOLO_MODEL_PATH.is_file():
+                raise FileNotFoundError(
+                    f"Bobot model hauler tidak ditemukan: {YOLO_MODEL_PATH.name}"
+                )
+            model = YOLO(str(YOLO_MODEL_PATH))
         elif detector == "bg":
             from bg_subtraction import BgSubDetector
 
