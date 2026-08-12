@@ -67,7 +67,8 @@ https://github.com/roboflow/supervision/assets/26109316/d50118c1-2ae4-458d-915a-
 ### web UI
 
 Siapkan environment lalu jalankan antarmuka web lokal dengan model ringan
-`yolo11n.pt`:
+`yolo11n.pt` (atau mode deteksi Background Subtraction yang tidak memerlukan
+model):
 
 ```bash
 python3.11 -m venv .venv
@@ -88,6 +89,18 @@ area jalan, kemudian pilih metode pengukuran:
   Gate B maupun Gate B ke Gate A. Gunakan **Tambah gate** untuk membuat Gate C,
   D, dan seterusnya. Setiap gate tambahan membutuhkan dua titik serta jarak
   nyata dari gate sebelumnya, lalu kecepatan dihitung per segmen berurutan.
+
+Selain itu, pilih **metode deteksi objek**:
+
+- **YOLO** (bawaan): deteksi deep learning menggunakan `yolo11x.pt`. Mengenal
+  kelas objek (mobil, truk, bus) dan membutuhkan konfigurasi confidence/IoU.
+- **Background Subtraction**: pendekatan klasik berbasis MOG2 tanpa model deep
+  learning. Sangat cepat dan mampu menangkap objek bergerak kecil (misalnya
+  hauler yang tampak jauh), cocok untuk kamera statis. Gunakan **Frame warmup**
+  untuk membangun model background sebelum kecepatan mulai dihitung. Deteksi
+  dapat disesuaikan lewat: min/max area piksel, solidity minimum (buang blob
+  awan/vegetasi), jarak merge blob, fraksi langit/bawah yang diabaikan, serta
+  sensitivitas MOG2 (`var_threshold`) dan `history`.
 
 Hasil akan tersedia untuk diputar dan diunduh dari halaman tersebut. Koordinat
 bawaan hanya sesuai untuk video contoh `vehicles.mp4`. Bobot `yolo11n.pt`
