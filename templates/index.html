@@ -66,6 +66,66 @@
           </section>
 
           <section id="measurement-settings" hidden>
+            <fieldset class="mode-selector detector-selector">
+              <legend>Metode deteksi objek</legend>
+              <label class="mode-option">
+                <input type="radio" name="detector" value="yolo" checked>
+                <span>YOLO</span>
+                <small>Deep learning. Mengenal kelas objek (mobil, truk, bus). Lebih lambat.</small>
+              </label>
+              <label class="mode-option">
+                <input type="radio" name="detector" value="bg">
+                <span>Background Subtraction</span>
+                <small>Klasik, sangat cepat, menangkap objek bergerak kecil (hauler). Kamera harus statis.</small>
+              </label>
+            </fieldset>
+
+            <div id="bg-settings" class="settings" hidden aria-label="Konfigurasi background subtraction">
+              <div class="setting">
+                <label for="bg_min_area">Min area (px²)</label>
+                <input id="bg_min_area" name="min_area" type="number" min="1" step="1" value="300" required>
+              </div>
+              <div class="setting">
+                <label for="bg_max_area">Max area (px²)</label>
+                <input id="bg_max_area" name="max_area" type="number" min="1" step="1" value="8000" required>
+              </div>
+              <div class="setting">
+                <label for="bg_min_solidity">Min solidity</label>
+                <input id="bg_min_solidity" name="min_solidity" type="number" min="0" max="1" step="0.05" value="0.40" required>
+                <small>Buang blob awan/vegetasi yang tidak solid.</small>
+              </div>
+              <div class="setting">
+                <label for="bg_merge_dist">Jarak merge (px)</label>
+                <input id="bg_merge_dist" name="merge_dist" type="number" min="0" step="1" value="60" required>
+                <small>Gabungkan blob yang berdekatan.</small>
+              </div>
+              <div class="setting">
+                <label for="bg_sky_fraction">Buang langit (atas)</label>
+                <input id="bg_sky_fraction" name="sky_fraction" type="number" min="0" max="1" step="0.05" value="0.15" required>
+                <small>Fraksi atas frame yang diabaikan.</small>
+              </div>
+              <div class="setting">
+                <label for="bg_bottom_fraction">Buang bawah</label>
+                <input id="bg_bottom_fraction" name="bottom_fraction" type="number" min="0" max="1" step="0.05" value="0.85" required>
+                <small>Hanya area di bawah fraksi ini yang dianalisis.</small>
+              </div>
+              <div class="setting">
+                <label for="bg_warmup_frames">Frame warmup</label>
+                <input id="bg_warmup_frames" name="warmup_frames" type="number" min="0" step="1" value="300" required>
+                <small>Frame awal untuk membangun model background. Kecepatan hanya dihitung setelahnya.</small>
+              </div>
+              <div class="setting">
+                <label for="bg_var_threshold">Var threshold</label>
+                <input id="bg_var_threshold" name="var_threshold" type="number" min="1" step="1" value="50" required>
+                <small>Sensitivitas MOG2. Lebih tinggi = lebih selektif.</small>
+              </div>
+              <div class="setting">
+                <label for="bg_history">History</label>
+                <input id="bg_history" name="history" type="number" min="1" step="1" value="500" required>
+                <small>Frame riwayat model background.</small>
+              </div>
+            </div>
+
             <div id="polygon-settings" class="settings" aria-label="Konfigurasi poligon">
               <div class="setting setting-wide">
                 <label for="source_polygon">Area jalan</label>
@@ -80,11 +140,11 @@
                 <label for="target_height">Panjang target</label>
                 <input id="target_height" name="target_height" type="number" min="1" value="250" required>
               </div>
-              <div class="setting">
+              <div class="setting yolo-only">
                 <label for="confidence_threshold">Confidence</label>
                 <input id="confidence_threshold" name="confidence_threshold" type="number" min="0.01" max="1" step="0.01" value="0.30" required>
               </div>
-              <div class="setting">
+              <div class="setting yolo-only">
                 <label for="iou_threshold">IoU</label>
                 <input id="iou_threshold" name="iou_threshold" type="number" min="0.01" max="1" step="0.01" value="0.50" required>
               </div>
@@ -97,12 +157,12 @@
                 <button id="add-gate" type="button" class="secondary-button">Tambah gate</button>
                 <small>Setiap gate baru membutuhkan dua titik dan jarak dari gate sebelumnya.</small>
               </div>
-              <div class="setting">
+              <div class="setting yolo-only">
                 <label for="confidence_threshold_gate">Confidence</label>
                 <input id="confidence_threshold_gate" type="number" min="0.01" max="1" step="0.01" value="0.30">
                 <small>Digunakan sama seperti mode poligon.</small>
               </div>
-              <div class="setting">
+              <div class="setting yolo-only">
                 <label for="iou_threshold_gate">IoU</label>
                 <input id="iou_threshold_gate" type="number" min="0.01" max="1" step="0.01" value="0.50">
                 <small>Digunakan sama seperti mode poligon.</small>

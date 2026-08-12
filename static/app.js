@@ -18,6 +18,8 @@ const iou = document.querySelector("#iou_threshold");
 const gateConfidence = document.querySelector("#confidence_threshold_gate");
 const gateIou = document.querySelector("#iou_threshold_gate");
 const modeInputs = document.querySelectorAll('input[name="mode"]');
+const detectorInputs = document.querySelectorAll('input[name="detector"]');
+const bgSettings = document.querySelector("#bg-settings");
 const undoPointButton = document.querySelector("#undo-point");
 const resetPointsButton = document.querySelector("#reset-points");
 const submitButton = document.querySelector("#submit-button");
@@ -48,6 +50,18 @@ function setModeSettings() {
   gateSettings.hidden = isPolygonMode;
   sourcePolygon.required = isPolygonMode;
   gateDefinitions.required = !isPolygonMode;
+}
+
+function selectedDetector() {
+  return document.querySelector('input[name="detector"]:checked').value;
+}
+
+function setDetectorSettings() {
+  const isYolo = selectedDetector() === "yolo";
+  document.querySelectorAll(".yolo-only").forEach((element) => {
+    element.hidden = !isYolo;
+  });
+  bgSettings.hidden = isYolo;
 }
 
 function gateName(index) {
@@ -217,6 +231,7 @@ fileInput.addEventListener("change", () => {
   calibrationPanel.hidden = false;
   measurementSettings.hidden = false;
   setModeSettings();
+  setDetectorSettings();
   resetGateConfiguration();
   resetCalibration();
 });
@@ -240,6 +255,10 @@ modeInputs.forEach((input) => {
     if (selectedMode() === "gate") resetGateConfiguration();
     resetCalibration();
   });
+});
+
+detectorInputs.forEach((input) => {
+  input.addEventListener("change", setDetectorSettings);
 });
 
 gateConfidence.addEventListener("input", () => { confidence.value = gateConfidence.value; });
@@ -322,7 +341,9 @@ form.addEventListener("submit", async (event) => {
   resultPanel.hidden = true;
   statusPanel.hidden = false;
   statusLabel.textContent = "Mengunggah dan menyiapkan analisis";
-  statusDetail.textContent = "Video sedang diproses dengan yolo11n.pt.";
+  statusDetail.textContent = selectedDetector() === "bg"
+    ? "Video sedang diproses dengan background subtraction."
+    : "Video sedang diproses dengan yolo11n.pt.";
   progressValue.textContent = "0%";
   progressBar.style.width = "0%";
   submitButton.disabled = true;
