@@ -169,7 +169,12 @@ function syncCalibrationInput() {
     gateDefinitions.value = "";
     return;
   }
-  const gates = Array.from({ length: gateCount }, (_, index) => calibrationPoints.slice(index * 2, index * 2 + 2));
+  const gates = Array.from(
+    { length: gateCount },
+    (_, index) => calibrationPoints
+      .slice(index * 2, index * 2 + 2)
+      .map((point) => [point.x, point.y]),
+  );
   gateDefinitions.value = JSON.stringify({ gates, distances: gateDistances.map(Number) });
 }
 
