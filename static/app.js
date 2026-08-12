@@ -4,6 +4,7 @@ const fileName = document.querySelector("#file-name");
 const calibrationPanel = document.querySelector("#calibration-panel");
 const calibrationVideo = document.querySelector("#calibration-video");
 const calibrationCanvas = document.querySelector("#calibration-canvas");
+const previewStatus = document.querySelector("#preview-status");
 const calibrationInstruction = document.querySelector("#calibration-instruction");
 const sourcePolygon = document.querySelector("#source_polygon");
 const polygonSettings = document.querySelector("#polygon-settings");
@@ -192,13 +193,27 @@ function resizeCalibrationCanvas() {
   drawCalibration();
 }
 
+function setPreviewStatus(message, state = "loading") {
+  previewStatus.textContent = message;
+  previewStatus.dataset.state = state;
+}
+
+fileInput.addEventListener("click", () => {
+  fileInput.value = "";
+});
+
 fileInput.addEventListener("change", () => {
   const file = fileInput.files[0];
   fileName.textContent = file?.name ?? "Belum ada file dipilih";
   if (!file) return;
+  calibrationVideo.pause();
+  calibrationVideo.removeAttribute("src");
+  calibrationVideo.load();
   if (calibrationUrl) URL.revokeObjectURL(calibrationUrl);
   calibrationUrl = URL.createObjectURL(file);
   calibrationVideo.src = calibrationUrl;
+  calibrationVideo.load();
+  setPreviewStatus("Memuat preview video.");
   calibrationPanel.hidden = false;
   measurementSettings.hidden = false;
   setModeSettings();
@@ -208,7 +223,15 @@ fileInput.addEventListener("change", () => {
 
 calibrationVideo.addEventListener("loadedmetadata", () => {
   resizeCalibrationCanvas();
+  setPreviewStatus("Preview siap. Jeda video pada frame yang paling jelas, lalu pilih titik kalibrasi.", "ready");
   updateCalibrationControls();
+});
+
+calibrationVideo.addEventListener("error", () => {
+  setPreviewStatus(
+    "Preview tidak dapat diputar oleh browser. Gunakan MP4 H.264 atau konversi video terlebih dahulu.",
+    "error",
+  );
 });
 
 modeInputs.forEach((input) => {
