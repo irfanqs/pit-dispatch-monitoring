@@ -139,7 +139,7 @@
                 <input id="route_display" readonly>
                 <small>Minimal 2 titik. Ikuti pusat jalur sesuai arah jalan lalu tekan “Selesai bentuk”.</small>
               </div>
-              <div class="setting">
+              <div class="setting route-length-setting">
                 <label for="route_length_meters">Panjang lintasan (meter)</label>
                 <input id="route_length_meters" name="route_length_meters" type="number" min="0.1" step="0.1" placeholder="Contoh: 180" required>
                 <small>Jarak nyata mengikuti tikungan, bukan jarak lurus.</small>
@@ -147,10 +147,12 @@
               <div class="setting yolo-only">
                 <label for="confidence_threshold">Confidence</label>
                 <input id="confidence_threshold" name="confidence_threshold" type="number" min="0.01" max="1" step="0.01" value="0.30" required>
+                <small>Minimum keyakinan agar hauler dihitung.</small>
               </div>
               <div class="setting yolo-only">
                 <label for="iou_threshold">IoU</label>
                 <input id="iou_threshold" name="iou_threshold" type="number" min="0.01" max="1" step="0.01" value="0.50" required>
+                <small>Filter kotak deteksi yang saling tumpang tindih.</small>
               </div>
             </div>
 
