@@ -3,7 +3,6 @@ data/
 venv*/
 .venv/
 __pycache__/
-*.pt
 *.pth
 *.mp4
 *.mov
