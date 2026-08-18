@@ -46,6 +46,10 @@ h2 { font-size: clamp(1.75rem, 3.5vw, 2.5rem); }
 .upload-target { min-height: 230px; padding: 36px; display: grid; place-items: center; align-content: center; text-align: center; cursor: pointer; border-radius: 9px; transition: background 180ms ease, transform 180ms ease; }
 .upload-target:hover { background: color-mix(in srgb, var(--accent) 8%, transparent); }
 .upload-target:active { transform: scale(0.99); }
+.source-selector { margin-bottom: 20px; }
+.source-selector + .upload-panel { margin-top: 0; }
+#rtsp-source-panel { display: grid; gap: 12px; padding: 16px; }
+#rtsp-source-panel button { justify-self: start; }
 .upload-title { font-size: 1.35rem; font-weight: 720; letter-spacing: -0.025em; }
 .upload-copy, .file-name { margin-top: 8px; color: var(--muted); font-size: 0.92rem; }
 .choose-file, button, .download-link { margin-top: 20px; padding: 11px 17px; border-radius: 8px; font-weight: 700; text-decoration: none; }
@@ -61,7 +65,7 @@ label { font-size: 0.9rem; font-weight: 700; }
 input:not([type="file"]) { width: 100%; color: var(--text); background: var(--canvas); border: 1px solid var(--line); border-radius: 8px; padding: 11px 12px; outline: none; }
 input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent); }
 small { color: var(--muted); line-height: 1.45; }
-.action-row { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-top: 28px; padding: 18px 20px 18px 24px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.action-row { display: flex; align-items: center; justify-content: flex-end; gap: 24px; margin-top: 28px; padding: 18px 20px 18px 24px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
 .action-row p { max-width: 640px; margin: 0; color: var(--muted); font-size: 0.9rem; line-height: 1.55; }
 button { margin-top: 0; min-width: 160px; color: var(--surface); background: var(--accent); border: 1px solid var(--accent); cursor: pointer; transition: background 180ms ease, transform 180ms ease; }
 button:hover, .download-link:hover { background: var(--accent-strong); }
