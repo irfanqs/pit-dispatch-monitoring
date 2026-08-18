@@ -34,7 +34,7 @@ button, input { font: inherit; }
 .topbar { min-height: 72px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); gap: 24px; }
 .brand { color: var(--text); text-decoration: none; font-size: 1.1rem; font-weight: 750; letter-spacing: -0.04em; }
 .topbar p { margin: 0; color: var(--muted); font-size: 0.9rem; }
-.workspace { padding-top: clamp(24px, 4vw, 48px); }
+.workspace { padding-top: clamp(20px, 3vw, 36px); }
 .intro { max-width: 730px; }
 .kicker { color: var(--accent); font-size: 0.76rem; font-weight: 750; letter-spacing: 0.1em; }
 h1, h2 { margin: 12px 0; letter-spacing: -0.055em; line-height: 1.04; }
@@ -113,7 +113,7 @@ img { max-width: 100%; }
 @media (max-width: 767px) {
   .shell { padding: 0 16px 40px; }
   .topbar { align-items: flex-start; flex-direction: column; justify-content: center; padding: 14px 0; gap: 4px; }
-  .workspace { padding-top: 28px; }
+  .workspace { padding-top: 24px; }
   .settings { grid-template-columns: 1fr 1fr; padding: 16px; }
   #polygon-settings { grid-template-columns: 1fr 1fr; }
   .setting-wide { grid-column: span 2; }
