@@ -3,6 +3,8 @@ data/
 venv*/
 .venv/
 __pycache__/
+*.pt
+!truck-hauler-ft.pt
 *.pth
 *.mp4
 *.mov
