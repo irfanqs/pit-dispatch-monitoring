@@ -10,7 +10,7 @@ from collections import defaultdict, deque
 from pathlib import Path
 from typing import Any
 
-from flask import Flask, jsonify, render_template, request, send_from_directory
+from flask import Flask, Response, jsonify, render_template, request, send_from_directory, stream_with_context
 from werkzeug.utils import secure_filename
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -335,7 +335,7 @@ def parse_bg_sub_config(form_data: dict[str, Any]) -> dict[str, float | int]:
 
 def run_estimation(
     job_id: str,
-    source_path: Path,
+    source_path: Path | str,
     target_path: Path,
     source_video_name: str,
     mode: str,
@@ -356,7 +356,26 @@ def run_estimation(
         import supervision as sv
         import av
 
-        video_info = sv.VideoInfo.from_video_path(video_path=str(source_path))
+        is_rtsp = isinstance(source_path, str) and source_path.lower().startswith("rtsp://")
+        capture = None
+        if is_rtsp:
+            capture = cv2.VideoCapture(source_path)
+            if not capture.isOpened():
+                raise ValueError("CCTV RTSP tidak dapat dibuka. Periksa URL, jaringan, dan kredensial kamera.")
+            fps = capture.get(cv2.CAP_PROP_FPS) or 25.0
+            width = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH))
+            height = int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            if width <= 0 or height <= 0:
+                raise ValueError("Resolusi stream RTSP tidak dapat dibaca.")
+            from types import SimpleNamespace
+
+            video_info = SimpleNamespace(
+                fps=max(float(fps), 1.0),
+                resolution_wh=(width, height),
+                total_frames=0,
+            )
+        else:
+            video_info = sv.VideoInfo.from_video_path(video_path=str(source_path))
         if mode == "polygon":
             if corridor_polygon is None or route_points is None or route_length_meters is None:
                 raise ValueError("Koridor atau lintasan belum lengkap.")
@@ -422,20 +441,38 @@ def run_estimation(
         speed_logs: list[dict[str, Any]] = []
         frame_count = max(video_info.total_frames, 1)
 
-        output_container = av.open(str(target_path), mode="w", options={"movflags": "+faststart"})
-        output_stream = output_container.add_stream("libx264", rate=round(video_info.fps))
-        output_stream.width, output_stream.height = video_info.resolution_wh
-        output_stream.pix_fmt = "yuv420p"
-        output_stream.options = {"crf": "23", "preset": "veryfast"}
+        output_container = None
+        output_stream = None
+        if not is_rtsp:
+            output_container = av.open(str(target_path), mode="w", options={"movflags": "+faststart"})
+            output_stream = output_container.add_stream("libx264", rate=round(video_info.fps))
+            output_stream.width, output_stream.height = video_info.resolution_wh
+            output_stream.pix_fmt = "yuv420p"
+            output_stream.options = {"crf": "23", "preset": "veryfast"}
+        frame_index = 0
         try:
-            for frame_index, frame in enumerate(
-                sv.get_video_frames_generator(source_path=str(source_path)), start=1
-            ):
+            if is_rtsp:
+                def rtsp_frames():
+                    while True:
+                        ok, next_frame = capture.read()
+                        if not ok:
+                            break
+                        yield next_frame
+
+                frames = rtsp_frames()
+            else:
+                frames = sv.get_video_frames_generator(source_path=str(source_path))
+            for frame_index, frame in enumerate(frames, start=1):
                 if bg_detector is not None:
                     detections = bg_detector.process(frame)
                     if detections is None:
-                        mux_h264_frame(output_container, output_stream, frame)
-                        update_job(job_id, progress=round(frame_index / frame_count * 100))
+                        if is_rtsp:
+                            ok, encoded = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+                            if ok:
+                                update_job(job_id, latest_frame=encoded.tobytes())
+                        else:
+                            mux_h264_frame(output_container, output_stream, frame)
+                            update_job(job_id, progress=round(frame_index / frame_count * 100))
                         continue
                 else:
                     result = model(frame, conf=confidence_threshold, iou=iou_threshold, verbose=False)[0]
@@ -581,10 +618,18 @@ def run_estimation(
                     mode,
                     completed_speeds,
                 )
-                mux_h264_frame(output_container, output_stream, annotated_frame)
-                update_job(job_id, progress=round(frame_index / frame_count * 100))
+                if is_rtsp:
+                    ok, encoded = cv2.imencode(".jpg", annotated_frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+                    if ok:
+                        update_job(job_id, latest_frame=encoded.tobytes(), frames_processed=frame_index)
+                else:
+                    mux_h264_frame(output_container, output_stream, annotated_frame)
+                    update_job(job_id, progress=round(frame_index / frame_count * 100))
         finally:
-            finish_h264_encoding(output_container, output_stream)
+            if output_container is not None:
+                finish_h264_encoding(output_container, output_stream)
+            if capture is not None:
+                capture.release()
 
         log_path = LOG_DIR / f"{job_id}-detection-log.xlsx"
         write_detection_workbook(
@@ -592,7 +637,7 @@ def run_estimation(
             source_video_name,
             mode,
             video_info.fps,
-            video_info.total_frames,
+            video_info.total_frames or frame_index,
             detection_logs,
             speed_logs,
         )
@@ -601,8 +646,9 @@ def run_estimation(
             job_id,
             status="complete",
             progress=100,
-            result_url=f"/results/{target_path.name}",
+            result_url=None if is_rtsp else f"/results/{target_path.name}",
             log_url=f"/logs/{log_path.name}",
+            stream_url=f"/api/jobs/{job_id}/stream" if is_rtsp else None,
         )
     except Exception as error:
         update_job(job_id, status="error", error=str(error))
@@ -617,10 +663,15 @@ def index() -> str:
 @app.post("/api/jobs")
 def create_job() -> tuple[Any, int] | Any:
     """Save an uploaded video and start its estimation job in a background thread."""
+    source_type = request.form.get("source_type", "file")
     video = request.files.get("video")
-    if video is None or not video.filename:
+    rtsp_url = request.form.get("rtsp_url", "").strip()
+    if source_type == "rtsp":
+        if not rtsp_url.lower().startswith("rtsp://"):
+            return jsonify(error="URL CCTV harus diawali rtsp://."), 400
+    elif video is None or not video.filename:
         return jsonify(error="Pilih file video terlebih dahulu."), 400
-    if not allowed_video(video.filename):
+    elif not allowed_video(video.filename):
         return jsonify(error="Format video tidak didukung."), 400
     try:
         mode = request.form.get("mode", "polygon")
@@ -656,12 +707,18 @@ def create_job() -> tuple[Any, int] | Any:
     RESULT_DIR.mkdir(parents=True, exist_ok=True)
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     job_id = uuid.uuid4().hex
-    filename = secure_filename(video.filename)
-    source_path = UPLOAD_DIR / f"{job_id}-{filename}"
+    filename = "CCTV RTSP" if source_type == "rtsp" else secure_filename(video.filename)
+    source_path: Path | str = rtsp_url if source_type == "rtsp" else UPLOAD_DIR / f"{job_id}-{filename}"
     target_path = RESULT_DIR / f"{job_id}-estimated.mp4"
-    video.save(source_path)
+    if source_type != "rtsp":
+        video.save(source_path)
     with jobs_lock:
-        jobs[job_id] = {"status": "processing", "progress": 0, "error": None}
+        jobs[job_id] = {
+            "status": "processing",
+            "progress": 0,
+            "error": None,
+            "stream_url": f"/api/jobs/{job_id}/stream" if source_type == "rtsp" else None,
+        }
     thread = threading.Thread(
         target=run_estimation,
         kwargs={
@@ -686,6 +743,53 @@ def create_job() -> tuple[Any, int] | Any:
     return jsonify(job_id=job_id), 202
 
 
+@app.get("/api/rtsp/preview")
+def rtsp_preview() -> Any:
+    """Return one JPEG frame so the operator can calibrate a CCTV stream."""
+    import cv2
+
+    url = request.args.get("url", "").strip()
+    if not url.lower().startswith("rtsp://"):
+        return jsonify(error="URL CCTV harus diawali rtsp://."), 400
+    capture = cv2.VideoCapture(url)
+    try:
+        if not capture.isOpened():
+            return jsonify(error="CCTV RTSP tidak dapat dibuka."), 400
+        ok, frame = capture.read()
+        if not ok:
+            return jsonify(error="Frame CCTV tidak tersedia."), 400
+        ok, encoded = cv2.imencode(".jpg", frame)
+        if not ok:
+            return jsonify(error="Frame CCTV gagal dikodekan."), 500
+        return Response(encoded.tobytes(), mimetype="image/jpeg")
+    finally:
+        capture.release()
+
+
+@app.get("/api/jobs/<job_id>/stream")
+def job_stream(job_id: str) -> Response:
+    """Stream the latest annotated RTSP frames as multipart JPEG."""
+    def frames():
+        import time
+
+        last_frame = None
+        while True:
+            with jobs_lock:
+                job = jobs.get(job_id)
+                if job is None:
+                    return
+                current_frame = job.get("latest_frame")
+                status = job.get("status")
+            if current_frame is not None and current_frame != last_frame:
+                last_frame = current_frame
+                yield b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + current_frame + b"\r\n"
+            if status in {"complete", "error"} and current_frame == last_frame:
+                return
+            time.sleep(0.04)
+
+    return Response(stream_with_context(frames()), mimetype="multipart/x-mixed-replace; boundary=frame")
+
+
 @app.get("/api/jobs/<job_id>")
 def get_job(job_id: str) -> tuple[Any, int] | Any:
     """Return the current state of a video processing job."""
@@ -693,7 +797,8 @@ def get_job(job_id: str) -> tuple[Any, int] | Any:
         job = jobs.get(job_id)
     if job is None:
         return jsonify(error="Pekerjaan tidak ditemukan."), 404
-    return jsonify(job)
+    public_job = {key: value for key, value in job.items() if key != "latest_frame"}
+    return jsonify(public_job)
 
 
 @app.get("/results/<path:filename>")

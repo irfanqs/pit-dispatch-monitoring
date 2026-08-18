@@ -21,7 +21,20 @@
         </div>
 
         <form id="analysis-form" class="analysis-form">
-          <div class="upload-panel">
+          <fieldset class="mode-selector source-selector">
+            <legend>Sumber video</legend>
+            <label class="mode-option">
+              <input type="radio" name="source_type" value="file" checked>
+              <span>Upload video</span>
+              <small>Analisis rekaman dan hasil MP4.</small>
+            </label>
+            <label class="mode-option">
+              <input type="radio" name="source_type" value="rtsp">
+              <span>CCTV realtime (RTSP)</span>
+              <small>Proses stream langsung dari kamera.</small>
+            </label>
+          </fieldset>
+          <div id="file-source-panel" class="upload-panel">
             <label class="upload-target" for="video">
               <span class="upload-title">Pilih video lalu mulai analisis</span>
               <span class="upload-copy">MP4, MOV, AVI, MKV, atau M4V. Maksimum 2 GB.</span>
@@ -29,6 +42,12 @@
               <input id="video" name="video" type="file" accept="video/*" required>
               <span id="file-name" class="file-name">Belum ada file dipilih</span>
             </label>
+          </div>
+          <div id="rtsp-source-panel" class="upload-panel" hidden>
+            <label for="rtsp_url">URL RTSP CCTV</label>
+            <input id="rtsp_url" name="rtsp_url" type="url" placeholder="rtsp://username:password@192.168.1.10:554/stream">
+            <button id="load-rtsp" type="button" class="secondary-button">Hubungkan untuk preview</button>
+            <small>Pastikan komputer ini dapat mengakses kamera dan URL tidak diblokir firewall.</small>
           </div>
 
           <section id="calibration-panel" class="calibration-panel" hidden aria-labelledby="calibration-title">
@@ -59,6 +78,7 @@
             </fieldset>
             <div class="video-calibrator">
               <video id="calibration-video" controls playsinline></video>
+              <img id="rtsp-preview" alt="Preview CCTV RTSP" hidden>
               <canvas id="calibration-canvas" aria-label="Area untuk memilih empat titik kalibrasi"></canvas>
             </div>
             <p id="preview-status" class="preview-status" aria-live="polite">Memuat preview video.</p>

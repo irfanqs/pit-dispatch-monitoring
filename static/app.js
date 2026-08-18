@@ -1,8 +1,14 @@
 const form = document.querySelector("#analysis-form");
 const fileInput = document.querySelector("#video");
 const fileName = document.querySelector("#file-name");
+const fileSourcePanel = document.querySelector("#file-source-panel");
+const rtspSourcePanel = document.querySelector("#rtsp-source-panel");
+const rtspUrlInput = document.querySelector("#rtsp_url");
+const loadRtspButton = document.querySelector("#load-rtsp");
+const sourceInputs = document.querySelectorAll('input[name="source_type"]');
 const calibrationPanel = document.querySelector("#calibration-panel");
 const calibrationVideo = document.querySelector("#calibration-video");
+const rtspPreview = document.querySelector("#rtsp-preview");
 const calibrationCanvas = document.querySelector("#calibration-canvas");
 const previewStatus = document.querySelector("#preview-status");
 const calibrationInstruction = document.querySelector("#calibration-instruction");
@@ -34,6 +40,7 @@ const progressValue = document.querySelector("#progress-value");
 const progressBar = document.querySelector("#progress-bar");
 const resultPanel = document.querySelector("#result-panel");
 const resultVideo = document.querySelector("#result-video");
+const liveStream = document.querySelector("#live-stream");
 const downloadLink = document.querySelector("#download-link");
 const downloadLogLink = document.querySelector("#download-log-link");
 const errorPanel = document.querySelector("#error-panel");
@@ -45,6 +52,19 @@ let polygonStep = "corridor";
 let calibrationUrl;
 let gateCount = 2;
 let gateDistances = [""];
+let rtspPreviewUrl;
+
+function selectedSource() {
+  return document.querySelector('input[name="source_type"]:checked').value;
+}
+
+function setSourceSettings() {
+  const isRtsp = selectedSource() === "rtsp";
+  fileSourcePanel.hidden = isRtsp;
+  rtspSourcePanel.hidden = !isRtsp;
+  fileInput.required = !isRtsp;
+  rtspUrlInput.required = isRtsp;
+}
 
 const pointNames = ["kiri atas", "kanan atas", "kanan bawah", "kiri bawah"];
 function selectedMode() {
@@ -230,8 +250,8 @@ function resetCalibration() {
 }
 
 function resizeCalibrationCanvas() {
-  calibrationCanvas.width = calibrationVideo.videoWidth;
-  calibrationCanvas.height = calibrationVideo.videoHeight;
+  calibrationCanvas.width = selectedSource() === "rtsp" ? rtspPreview.naturalWidth : calibrationVideo.videoWidth;
+  calibrationCanvas.height = selectedSource() === "rtsp" ? rtspPreview.naturalHeight : calibrationVideo.videoHeight;
   drawCalibration();
 }
 
@@ -264,6 +284,52 @@ fileInput.addEventListener("change", () => {
   resetCalibration();
 });
 
+sourceInputs.forEach((input) => input.addEventListener("change", () => {
+  setSourceSettings();
+  if (selectedSource() === "rtsp") {
+    calibrationVideo.hidden = true;
+    rtspPreview.hidden = false;
+  } else {
+    calibrationVideo.hidden = false;
+    rtspPreview.hidden = true;
+  }
+}));
+
+loadRtspButton.addEventListener("click", async () => {
+  const url = rtspUrlInput.value.trim();
+  if (!url.startsWith("rtsp://")) {
+    setPreviewStatus("URL harus diawali rtsp://.", "error");
+    return;
+  }
+  loadRtspButton.disabled = true;
+  setPreviewStatus("Mengambil frame CCTV untuk preview.");
+  try {
+    const response = await fetch(`/api/rtsp/preview?url=${encodeURIComponent(url)}`);
+    const payload = response.headers.get("content-type")?.startsWith("application/json")
+      ? await response.json() : null;
+    if (!response.ok) throw new Error(payload?.error || "CCTV tidak dapat dibuka.");
+    const blob = await response.blob();
+    if (rtspPreviewUrl) URL.revokeObjectURL(rtspPreviewUrl);
+    rtspPreviewUrl = URL.createObjectURL(blob);
+    rtspPreview.src = rtspPreviewUrl;
+    calibrationPanel.hidden = false;
+    measurementSettings.hidden = false;
+    setModeSettings();
+    setDetectorSettings();
+    resetGateConfiguration();
+    resetCalibration();
+    rtspPreview.onload = () => {
+      resizeCalibrationCanvas();
+      setPreviewStatus("Preview CCTV siap. Pilih titik kalibrasi pada gambar.", "ready");
+      updateCalibrationControls();
+    };
+  } catch (error) {
+    setPreviewStatus(error.message, "error");
+  } finally {
+    loadRtspButton.disabled = false;
+  }
+});
+
 calibrationVideo.addEventListener("loadedmetadata", () => {
   resizeCalibrationCanvas();
   setPreviewStatus("Preview siap. Jeda video pada frame yang paling jelas, lalu pilih titik kalibrasi.", "ready");
@@ -294,7 +360,8 @@ gateIou.addEventListener("input", () => { iou.value = gateIou.value; });
 
 calibrationCanvas.addEventListener("pointerdown", (event) => {
   const requiredPointCount = selectedMode() === "polygon" ? 4 : gateCount * 2;
-  if ((selectedMode() === "gate" && calibrationPoints.length === requiredPointCount) || !calibrationVideo.videoWidth) return;
+  const previewReady = selectedSource() === "rtsp" ? rtspPreview.naturalWidth : calibrationVideo.videoWidth;
+  if ((selectedMode() === "gate" && calibrationPoints.length === requiredPointCount) || !previewReady) return;
   const bounds = calibrationCanvas.getBoundingClientRect();
   const point = {
     x: Math.round((event.clientX - bounds.left) * calibrationCanvas.width / bounds.width),
@@ -343,6 +410,7 @@ addGateButton.addEventListener("click", () => {
 
 window.addEventListener("beforeunload", () => {
   if (calibrationUrl) URL.revokeObjectURL(calibrationUrl);
+  if (rtspPreviewUrl) URL.revokeObjectURL(rtspPreviewUrl);
 });
 
 function showError(message) {
@@ -360,6 +428,13 @@ async function pollJob(jobId) {
 
   progressValue.textContent = `${job.progress}%`;
   progressBar.style.width = `${job.progress}%`;
+  if (job.stream_url) {
+    liveStream.src = job.stream_url;
+    liveStream.hidden = false;
+    resultVideo.hidden = true;
+    resultPanel.hidden = false;
+    statusDetail.textContent = "CCTV sedang diproses realtime.";
+  }
   if (job.status === "processing") {
     window.setTimeout(() => pollJob(jobId).catch((error) => showError(error.message)), 1000);
     return;
@@ -370,8 +445,13 @@ async function pollJob(jobId) {
   }
   statusLabel.textContent = "Analisis selesai";
   statusDetail.textContent = "Video hasil siap diputar atau diunduh.";
-  resultVideo.src = job.result_url;
-  downloadLink.href = job.result_url;
+  if (job.result_url) {
+    resultVideo.src = job.result_url;
+    resultVideo.hidden = false;
+    downloadLink.href = job.result_url;
+  } else {
+    downloadLink.hidden = true;
+  }
   downloadLogLink.href = job.log_url;
   resultPanel.hidden = false;
   submitButton.disabled = false;
@@ -382,6 +462,9 @@ form.addEventListener("submit", async (event) => {
   event.preventDefault();
   errorPanel.hidden = true;
   resultPanel.hidden = true;
+  resultVideo.hidden = true;
+  liveStream.hidden = true;
+  downloadLink.hidden = false;
   statusPanel.hidden = false;
   statusLabel.textContent = "Mengunggah dan menyiapkan analisis";
   statusDetail.textContent = selectedDetector() === "bg"
@@ -402,3 +485,5 @@ form.addEventListener("submit", async (event) => {
     showError(error.message);
   }
 });
+
+setSourceSettings();
