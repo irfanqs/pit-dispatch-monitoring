@@ -5,3 +5,4 @@ ultralytics
 jsonargparse[signatures]
 Flask
 openpyxl
+tzdata

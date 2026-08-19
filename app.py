@@ -7,10 +7,10 @@ import os
 import threading
 import uuid
 from collections import defaultdict, deque
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from flask import Flask, Response, jsonify, render_template, request, send_from_directory, stream_with_context
 from werkzeug.utils import secure_filename
@@ -35,7 +35,11 @@ BG_SUB_DEFAULTS = {
     "min_solidity": 0.40,
     "merge_dist": 60,
 }
-LOG_TIMEZONE = ZoneInfo("Asia/Jakarta")
+try:
+    LOG_TIMEZONE = ZoneInfo("Asia/Jakarta")
+except ZoneInfoNotFoundError:
+    # Windows may not ship the IANA timezone database; Jakarta is UTC+7 year-round.
+    LOG_TIMEZONE = timezone(timedelta(hours=7))
 TRACK_CONFIRMATION_FRAMES = 5
 
 app = Flask(__name__)
