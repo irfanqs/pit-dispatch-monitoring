@@ -120,8 +120,12 @@ Untuk video rekaman, aplikasi menghasilkan:
 - Video MP4 beranotasi.
 - Workbook Excel berisi ringkasan, deteksi per frame, dan pengukuran kecepatan.
 
-Untuk RTSP, anotasi ditampilkan langsung melalui stream realtime dan workbook
-Excel dibuat setelah sesi berakhir.
+Untuk RTSP, anotasi ditampilkan langsung melalui stream realtime. Workbook Excel
+dibuat otomatis per hari menggunakan tanggal lokal `Asia/Jakarta`, sehingga
+sesi CCTV panjang tidak menumpuk dalam satu file. Setiap workbook memiliki
+sheet `Ringkasan Kendaraan`, `Deteksi`, dan `Kecepatan`. Track baru hanya dicatat
+setelah terdeteksi minimal lima frame untuk mengurangi false positive dan ID
+sesaat.
 
 ## Script CLI Tambahan
 

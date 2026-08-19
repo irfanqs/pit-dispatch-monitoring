@@ -7,8 +7,10 @@ import os
 import threading
 import uuid
 from collections import defaultdict, deque
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from flask import Flask, Response, jsonify, render_template, request, send_from_directory, stream_with_context
 from werkzeug.utils import secure_filename
@@ -33,6 +35,8 @@ BG_SUB_DEFAULTS = {
     "min_solidity": 0.40,
     "merge_dist": 60,
 }
+LOG_TIMEZONE = ZoneInfo("Asia/Jakarta")
+TRACK_CONFIRMATION_FRAMES = 5
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024 * 1024
@@ -203,6 +207,50 @@ def write_detection_workbook(
     summary.column_dimensions["A"].width = 28
     summary.column_dimensions["B"].width = 32
 
+    vehicle_sheet = workbook.create_sheet("Ringkasan Kendaraan")
+    vehicle_sheet.append(
+        [
+            "Tracker ID",
+            "Frame pertama",
+            "Frame terakhir",
+            "Jumlah sampel",
+            "Confidence rata-rata",
+            "Kecepatan maksimum (km/h)",
+        ]
+    )
+    vehicle_rows: dict[int, dict[str, Any]] = {}
+    for entry in detection_logs:
+        tracker_id = int(entry["tracker_id"])
+        row = vehicle_rows.setdefault(
+            tracker_id,
+            {
+                "first_frame": entry["frame"],
+                "last_frame": entry["frame"],
+                "samples": 0,
+                "confidence_total": 0.0,
+                "max_speed": 0,
+            },
+        )
+        row["last_frame"] = entry["frame"]
+        row["samples"] += 1
+        row["confidence_total"] += entry["confidence"]
+        if entry["speed_kmh"] is not None:
+            row["max_speed"] = max(row["max_speed"], int(entry["speed_kmh"]))
+    for tracker_id, row in sorted(vehicle_rows.items()):
+        vehicle_sheet.append(
+            [
+                tracker_id,
+                row["first_frame"],
+                row["last_frame"],
+                row["samples"],
+                row["confidence_total"] / row["samples"],
+                row["max_speed"],
+            ]
+        )
+    format_log_sheet(vehicle_sheet)
+    for cell in vehicle_sheet["E"][1:]:
+        cell.number_format = "0.00"
+
     detections_sheet = workbook.create_sheet("Deteksi")
     detections_sheet.append(
         [
@@ -278,10 +326,13 @@ def record_detections(
     video_fps: float,
     mode: str,
     speeds: dict[int, int],
+    confirmed_tracker_ids: set[int] | None = None,
 ) -> None:
-    """Append the current tracked detections and their latest speeds to the log."""
+    """Append only stable tracked detections and their latest speeds to the log."""
     for index, tracker_id in enumerate(detections.tracker_id):
         tracker_key = int(tracker_id)
+        if confirmed_tracker_ids is not None and tracker_key not in confirmed_tracker_ids:
+            continue
         x1, y1, x2, y2 = detections.xyxy[index]
         detection_logs.append(
             {
@@ -439,7 +490,30 @@ def run_estimation(
         logged_speeds: dict[int, int] = {}
         detection_logs: list[dict[str, Any]] = []
         speed_logs: list[dict[str, Any]] = []
+        track_hits: defaultdict[int, int] = defaultdict(int)
         frame_count = max(video_info.total_frames, 1)
+        log_date: date = datetime.now(LOG_TIMEZONE).date()
+        log_paths: list[Path] = []
+
+        def daily_log_path(report_date: date) -> Path:
+            if is_rtsp:
+                return LOG_DIR / f"{job_id}-{report_date.isoformat()}-detection-log.xlsx"
+            return LOG_DIR / f"{job_id}-detection-log.xlsx"
+
+        def save_current_log(report_date: date) -> Path:
+            path = daily_log_path(report_date)
+            write_detection_workbook(
+                path,
+                source_video_name,
+                mode,
+                video_info.fps,
+                video_info.total_frames or frame_index,
+                detection_logs,
+                speed_logs,
+            )
+            if path not in log_paths:
+                log_paths.append(path)
+            return path
 
         output_container = None
         output_stream = None
@@ -463,6 +537,14 @@ def run_estimation(
             else:
                 frames = sv.get_video_frames_generator(source_path=str(source_path))
             for frame_index, frame in enumerate(frames, start=1):
+                if is_rtsp:
+                    frame_date = datetime.now(LOG_TIMEZONE).date()
+                    if frame_date != log_date:
+                        save_current_log(log_date)
+                        detection_logs.clear()
+                        speed_logs.clear()
+                        logged_speeds.clear()
+                        log_date = frame_date
                 if bg_detector is not None:
                     detections = bg_detector.process(frame)
                     if detections is None:
@@ -484,6 +566,13 @@ def run_estimation(
                     )
                     detections = detections[inside]
                 detections = tracker.update_with_detections(detections=detections)
+                for tracker_id in detections.tracker_id:
+                    track_hits[int(tracker_id)] += 1
+                confirmed_tracker_ids = {
+                    int(tracker_id)
+                    for tracker_id in detections.tracker_id
+                    if track_hits[int(tracker_id)] >= TRACK_CONFIRMATION_FRAMES
+                }
                 points = detections.get_anchors_coordinates(sv.Position.BOTTOM_CENTER)
                 if bg_detector is not None:
                     smoothed = []
@@ -504,6 +593,9 @@ def run_estimation(
                 labels = []
                 if mode == "polygon":
                     for tracker_id, point in zip(detections.tracker_id, points, strict=True):
+                        if int(tracker_id) not in confirmed_tracker_ids:
+                            labels.append(f"#{tracker_id}")
+                            continue
                         route_distance_px, route_offset_px = project_to_polyline(
                             (float(point[0]), float(point[1])), route
                         )
@@ -540,6 +632,9 @@ def run_estimation(
                 else:
                     for tracker_id, point in zip(detections.tracker_id, points, strict=True):
                         tracker_key = int(tracker_id)
+                        if tracker_key not in confirmed_tracker_ids:
+                            labels.append(f"#{tracker_id}")
+                            continue
                         current_position = (float(point[0]), float(point[1]))
                         previous_position = previous_positions.get(tracker_key)
                         if previous_position is not None:
@@ -617,6 +712,7 @@ def run_estimation(
                     video_info.fps,
                     mode,
                     completed_speeds,
+                    confirmed_tracker_ids,
                 )
                 if is_rtsp:
                     ok, encoded = cv2.imencode(".jpg", annotated_frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
@@ -631,16 +727,7 @@ def run_estimation(
             if capture is not None:
                 capture.release()
 
-        log_path = LOG_DIR / f"{job_id}-detection-log.xlsx"
-        write_detection_workbook(
-            log_path,
-            source_video_name,
-            mode,
-            video_info.fps,
-            video_info.total_frames or frame_index,
-            detection_logs,
-            speed_logs,
-        )
+        log_path = save_current_log(log_date)
 
         update_job(
             job_id,
@@ -648,6 +735,7 @@ def run_estimation(
             progress=100,
             result_url=None if is_rtsp else f"/results/{target_path.name}",
             log_url=f"/logs/{log_path.name}",
+            log_urls=[f"/logs/{path.name}" for path in log_paths],
             stream_url=f"/api/jobs/{job_id}/stream" if is_rtsp else None,
         )
     except Exception as error:
