@@ -3,6 +3,8 @@ const fileInput = document.querySelector("#video");
 const fileName = document.querySelector("#file-name");
 const fileSourcePanel = document.querySelector("#file-source-panel");
 const rtspSourcePanel = document.querySelector("#rtsp-source-panel");
+const multiRtspSourcePanel = document.querySelector("#multi-rtsp-source-panel");
+const multiCameraList = document.querySelector("#multi-camera-list");
 const rtspUrlInput = document.querySelector("#rtsp_url");
 const loadRtspButton = document.querySelector("#load-rtsp");
 const sourceInputs = document.querySelectorAll('input[name="source_type"]');
@@ -12,6 +14,7 @@ const rtspPreview = document.querySelector("#rtsp-preview");
 const calibrationCanvas = document.querySelector("#calibration-canvas");
 const previewStatus = document.querySelector("#preview-status");
 const calibrationInstruction = document.querySelector("#calibration-instruction");
+const activeCameraLabel = document.querySelector("#active-camera-label");
 const corridorPolygon = document.querySelector("#corridor_polygon");
 const routePointsInput = document.querySelector("#route_points");
 const corridorDisplay = document.querySelector("#corridor_display");
@@ -41,6 +44,7 @@ const progressBar = document.querySelector("#progress-bar");
 const resultPanel = document.querySelector("#result-panel");
 const resultVideo = document.querySelector("#result-video");
 const liveStream = document.querySelector("#live-stream");
+const multiLiveGrid = document.querySelector("#multi-live-grid");
 const downloadLink = document.querySelector("#download-link");
 const downloadLogLink = document.querySelector("#download-log-link");
 const errorPanel = document.querySelector("#error-panel");
@@ -53,17 +57,123 @@ let calibrationUrl;
 let gateCount = 2;
 let gateDistances = [""];
 let rtspPreviewUrl;
+let activeMultiCamera = null;
+const multiCameraStates = Array.from({ length: 4 }, (_, index) => ({
+  name: `Kamera ${index + 1}`,
+  url: "",
+  corridorPoints: [],
+  routePoints: [],
+  calibrationPoints: [],
+  polygonStep: "corridor",
+  gateCount: 2,
+  gateDistances: [""],
+  routeLength: "",
+  previewUrl: null,
+}));
 
 function selectedSource() {
   return document.querySelector('input[name="source_type"]:checked').value;
 }
 
 function setSourceSettings() {
-  const isRtsp = selectedSource() === "rtsp";
-  fileSourcePanel.hidden = isRtsp;
+  const source = selectedSource();
+  const isRtsp = source === "rtsp";
+  const isMultiRtsp = source === "multi_rtsp";
+  fileSourcePanel.hidden = source !== "file";
   rtspSourcePanel.hidden = !isRtsp;
-  fileInput.required = !isRtsp;
+  multiRtspSourcePanel.hidden = !isMultiRtsp;
+  fileInput.required = source === "file";
   rtspUrlInput.required = isRtsp;
+  if (isMultiRtsp) renderMultiCameraList();
+}
+
+function saveActiveMultiCalibration() {
+  if (activeMultiCamera === null) return;
+  const state = multiCameraStates[activeMultiCamera];
+  state.corridorPoints = structuredClone(corridorPoints);
+  state.routePoints = structuredClone(routePoints);
+  state.calibrationPoints = structuredClone(calibrationPoints);
+  state.polygonStep = polygonStep;
+  state.gateCount = gateCount;
+  state.gateDistances = [...gateDistances];
+  state.routeLength = document.querySelector("#route_length_meters").value;
+}
+
+function restoreMultiCalibration(index) {
+  const state = multiCameraStates[index];
+  corridorPoints = structuredClone(state.corridorPoints);
+  routePoints = structuredClone(state.routePoints);
+  calibrationPoints = structuredClone(state.calibrationPoints);
+  polygonStep = state.polygonStep;
+  gateCount = state.gateCount;
+  gateDistances = [...state.gateDistances];
+  document.querySelector("#route_length_meters").value = state.routeLength;
+  syncCalibrationInput();
+  renderGateList();
+  drawCalibration();
+  updateCalibrationControls();
+}
+
+function renderMultiCameraList() {
+  multiCameraList.replaceChildren();
+  multiCameraStates.forEach((camera, index) => {
+    const card = document.createElement("div");
+    card.className = "camera-config";
+    const nameLabel = document.createElement("label");
+    nameLabel.textContent = `Nama Kamera ${index + 1}`;
+    const nameInput = document.createElement("input");
+    nameInput.value = camera.name;
+    nameInput.addEventListener("input", () => { camera.name = nameInput.value; });
+    nameLabel.append(nameInput);
+    const urlLabel = document.createElement("label");
+    urlLabel.textContent = "URL RTSP";
+    const urlInput = document.createElement("input");
+    urlInput.type = "url";
+    urlInput.placeholder = "rtsp://username:password@kamera:554/stream";
+    urlInput.value = camera.url;
+    urlInput.addEventListener("input", () => { camera.url = urlInput.value.trim(); });
+    urlLabel.append(urlInput);
+    const previewButton = document.createElement("button");
+    previewButton.type = "button";
+    previewButton.className = "secondary-button";
+    previewButton.textContent = activeMultiCamera === index ? "Sedang dikalibrasi" : "Preview dan kalibrasi";
+    previewButton.addEventListener("click", () => activateMultiCamera(index));
+    card.append(nameLabel, urlLabel, previewButton);
+    multiCameraList.append(card);
+  });
+}
+
+async function activateMultiCamera(index) {
+  saveActiveMultiCalibration();
+  const camera = multiCameraStates[index];
+  if (!camera.url.startsWith("rtsp://")) {
+    setPreviewStatus(`URL ${camera.name} harus diawali rtsp://.`, "error");
+    return;
+  }
+  activeMultiCamera = index;
+  calibrationVideo.hidden = true;
+  rtspPreview.hidden = false;
+  calibrationPanel.hidden = false;
+  measurementSettings.hidden = false;
+  activeCameraLabel.hidden = false;
+  activeCameraLabel.textContent = `Kalibrasi aktif: ${camera.name}`;
+  setPreviewStatus(`Mengambil frame ${camera.name}.`);
+  renderMultiCameraList();
+  try {
+    const response = await fetch(`/api/rtsp/preview?url=${encodeURIComponent(camera.url)}`);
+    const payload = response.headers.get("content-type")?.startsWith("application/json") ? await response.json() : null;
+    if (!response.ok) throw new Error(payload?.error || `${camera.name} tidak dapat dibuka.`);
+    if (camera.previewUrl) URL.revokeObjectURL(camera.previewUrl);
+    camera.previewUrl = URL.createObjectURL(await response.blob());
+    rtspPreview.src = camera.previewUrl;
+    rtspPreview.onload = () => {
+      restoreMultiCalibration(index);
+      resizeCalibrationCanvas();
+      setPreviewStatus(`Preview ${camera.name} siap. Lakukan kalibrasi kamera ini.`, "ready");
+    };
+  } catch (error) {
+    setPreviewStatus(error.message, "error");
+  }
 }
 
 const pointNames = ["kiri atas", "kanan atas", "kanan bawah", "kiri bawah"];
@@ -250,8 +360,9 @@ function resetCalibration() {
 }
 
 function resizeCalibrationCanvas() {
-  calibrationCanvas.width = selectedSource() === "rtsp" ? rtspPreview.naturalWidth : calibrationVideo.videoWidth;
-  calibrationCanvas.height = selectedSource() === "rtsp" ? rtspPreview.naturalHeight : calibrationVideo.videoHeight;
+  const isCameraSource = selectedSource() === "rtsp" || selectedSource() === "multi_rtsp";
+  calibrationCanvas.width = isCameraSource ? rtspPreview.naturalWidth : calibrationVideo.videoWidth;
+  calibrationCanvas.height = isCameraSource ? rtspPreview.naturalHeight : calibrationVideo.videoHeight;
   drawCalibration();
 }
 
@@ -286,7 +397,7 @@ fileInput.addEventListener("change", () => {
 
 sourceInputs.forEach((input) => input.addEventListener("change", () => {
   setSourceSettings();
-  if (selectedSource() === "rtsp") {
+  if (selectedSource() === "rtsp" || selectedSource() === "multi_rtsp") {
     calibrationVideo.hidden = true;
     rtspPreview.hidden = false;
   } else {
@@ -360,7 +471,8 @@ gateIou.addEventListener("input", () => { iou.value = gateIou.value; });
 
 calibrationCanvas.addEventListener("pointerdown", (event) => {
   const requiredPointCount = selectedMode() === "polygon" ? 4 : gateCount * 2;
-  const previewReady = selectedSource() === "rtsp" ? rtspPreview.naturalWidth : calibrationVideo.videoWidth;
+  const previewReady = (selectedSource() === "rtsp" || selectedSource() === "multi_rtsp")
+    ? rtspPreview.naturalWidth : calibrationVideo.videoWidth;
   if ((selectedMode() === "gate" && calibrationPoints.length === requiredPointCount) || !previewReady) return;
   const bounds = calibrationCanvas.getBoundingClientRect();
   const point = {
@@ -458,12 +570,98 @@ async function pollJob(jobId) {
   submitButton.textContent = "Analisis video lain";
 }
 
+async function pollMultiJobs(cameraJobs) {
+  const states = await Promise.all(cameraJobs.map(async ({ jobId, status }) => {
+    const response = await fetch(`/api/jobs/${jobId}`);
+    const job = await response.json();
+    if (!response.ok) throw new Error(job.error || "Status kamera tidak tersedia.");
+    status.textContent = job.status === "error" ? `Error: ${job.error}` : job.status === "complete" ? "Sesi selesai" : "Realtime aktif";
+    return job.status;
+  }));
+  if (states.some((state) => state === "processing")) {
+    window.setTimeout(() => pollMultiJobs(cameraJobs).catch((error) => showError(error.message)), 1000);
+    return;
+  }
+  submitButton.disabled = false;
+  submitButton.textContent = "Mulai sesi baru";
+}
+
+async function startMultiAnalysis() {
+  saveActiveMultiCalibration();
+  const cameras = multiCameraStates.filter((camera) => camera.url);
+  if (cameras.length < 2) throw new Error("Masukkan minimal dua URL RTSP.");
+  if (activeMultiCamera === null) throw new Error("Preview dan kalibrasi setiap kamera terlebih dahulu.");
+  const mode = selectedMode();
+  const configuredCameras = cameras.map((camera) => {
+    if (mode === "polygon") {
+      if (camera.polygonStep !== "done" || !Number.isFinite(Number(camera.routeLength)) || Number(camera.routeLength) <= 0) {
+        throw new Error(`Kalibrasi ${camera.name} belum selesai.`);
+      }
+      return {
+        name: camera.name,
+        url: camera.url,
+        corridor_polygon: camera.corridorPoints.map((point) => [point.x, point.y]),
+        route_points: camera.routePoints.map((point) => [point.x, point.y]),
+        route_length_meters: Number(camera.routeLength),
+      };
+    }
+    if (camera.calibrationPoints.length !== camera.gateCount * 2 || camera.gateDistances.some((value) => Number(value) <= 0)) {
+      throw new Error(`Kalibrasi gate ${camera.name} belum lengkap.`);
+    }
+    return {
+      name: camera.name,
+      url: camera.url,
+      gate_definitions: {
+        gates: Array.from({ length: camera.gateCount }, (_, index) => camera.calibrationPoints
+          .slice(index * 2, index * 2 + 2).map((point) => [point.x, point.y])),
+        distances: camera.gateDistances.map(Number),
+      },
+    };
+  });
+  const payload = Object.fromEntries(new FormData(form).entries());
+  payload.mode = mode;
+  payload.detector = selectedDetector();
+  payload.cameras = configuredCameras;
+  const response = await fetch("/api/multi-rtsp-jobs", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || "Dashboard CCTV tidak dapat dimulai.");
+  multiLiveGrid.replaceChildren();
+  const cameraJobs = result.jobs.map((job) => {
+    const card = document.createElement("article");
+    card.className = "camera-live-card";
+    const title = document.createElement("h3");
+    title.textContent = job.camera_name;
+    const image = document.createElement("img");
+    image.alt = `Stream ${job.camera_name}`;
+    image.src = `/api/jobs/${job.job_id}/stream`;
+    const status = document.createElement("small");
+    status.textContent = "Menghubungkan stream...";
+    card.append(title, image, status);
+    multiLiveGrid.append(card);
+    return { jobId: job.job_id, status };
+  });
+  liveStream.hidden = true;
+  resultVideo.hidden = true;
+  multiLiveGrid.hidden = false;
+  downloadLink.hidden = true;
+  downloadLogLink.hidden = true;
+  resultPanel.hidden = false;
+  statusLabel.textContent = "Dashboard CCTV berjalan";
+  statusDetail.textContent = "Setiap kamera diproses dan dicatat secara terpisah.";
+  pollMultiJobs(cameraJobs).catch((error) => showError(error.message));
+}
+
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   errorPanel.hidden = true;
   resultPanel.hidden = true;
   resultVideo.hidden = true;
   liveStream.hidden = true;
+  multiLiveGrid.hidden = true;
   downloadLink.hidden = false;
   statusPanel.hidden = false;
   statusLabel.textContent = "Mengunggah dan menyiapkan analisis";
@@ -476,6 +674,10 @@ form.addEventListener("submit", async (event) => {
   submitButton.textContent = "Memproses";
 
   try {
+    if (selectedSource() === "multi_rtsp") {
+      await startMultiAnalysis();
+      return;
+    }
     const response = await fetch("/api/jobs", { method: "POST", body: new FormData(form) });
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.error || "Video tidak dapat dikirim.");

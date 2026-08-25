@@ -50,6 +50,16 @@ h2 { font-size: clamp(1.75rem, 3.5vw, 2.5rem); }
 .source-selector + .upload-panel { margin-top: 0; }
 #rtsp-source-panel { display: grid; gap: 12px; padding: 16px; }
 #rtsp-source-panel button { justify-self: start; }
+.multi-camera-config { display: grid; gap: 20px; padding: 24px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.multi-camera-config h2 { font-size: clamp(1.35rem, 2.5vw, 1.9rem); }
+.multi-camera-config p { margin: 0; color: var(--muted); line-height: 1.55; }
+.multi-camera-list, .multi-live-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.camera-config, .camera-live-card { display: grid; gap: 10px; padding: 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-muted); }
+.camera-config label { display: grid; gap: 7px; }
+.camera-config button { justify-self: start; }
+.active-camera-label { margin: 0 0 18px; color: var(--accent); font-weight: 750; }
+.camera-live-card h3 { margin: 0; font-size: 1rem; }
+.camera-live-card img { width: 100%; border-radius: 8px; background: #111; }
 .upload-title { font-size: 1.35rem; font-weight: 720; letter-spacing: -0.025em; }
 .upload-copy, .file-name { margin-top: 8px; color: var(--muted); font-size: 0.92rem; }
 .choose-file, button, .download-link { margin-top: 20px; padding: 11px 17px; border-radius: 8px; font-weight: 700; text-decoration: none; }
@@ -127,6 +137,7 @@ img { max-width: 100%; }
   .calibration-actions button { width: 100%; }
   .mode-selector { grid-template-columns: 1fr; }
   .gate-list { grid-template-columns: 1fr; }
+  .multi-camera-list, .multi-live-grid { grid-template-columns: 1fr; }
 .action-row button, .download-link, .secondary-link { width: 100%; text-align: center; }
 .action-row { padding: 16px; gap: 16px; }
 }

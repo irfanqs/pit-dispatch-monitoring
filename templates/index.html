@@ -33,6 +33,11 @@
               <span>CCTV realtime (RTSP)</span>
               <small>Proses stream langsung dari kamera.</small>
             </label>
+            <label class="mode-option">
+              <input type="radio" name="source_type" value="multi_rtsp">
+              <span>Dashboard 4 CCTV</span>
+              <small>Empat stream realtime dengan kalibrasi terpisah.</small>
+            </label>
           </fieldset>
           <div id="file-source-panel" class="upload-panel">
             <label class="upload-target" for="video">
@@ -49,6 +54,14 @@
             <button id="load-rtsp" type="button" class="secondary-button">Hubungkan untuk preview</button>
             <small>Pastikan komputer ini dapat mengakses kamera dan URL tidak diblokir firewall.</small>
           </div>
+          <section id="multi-rtsp-source-panel" class="multi-camera-config" hidden aria-labelledby="multi-camera-title">
+            <div>
+              <span class="kicker">Dashboard multi-kamera</span>
+              <h2 id="multi-camera-title">Hubungkan dan kalibrasi tiap kamera</h2>
+              <p>Masukkan dua hingga empat URL RTSP. Klik preview pada satu kamera, lalu lakukan kalibrasi sebelum berpindah ke kamera berikutnya.</p>
+            </div>
+            <div id="multi-camera-list" class="multi-camera-list"></div>
+          </section>
 
           <section id="calibration-panel" class="calibration-panel" hidden aria-labelledby="calibration-title">
             <div class="calibration-heading">
@@ -63,6 +76,7 @@
                 <button id="reset-points" type="button" class="secondary-button" disabled>Ulangi titik</button>
               </div>
             </div>
+            <p id="active-camera-label" class="active-camera-label" hidden></p>
             <fieldset class="mode-selector">
               <legend>Metode pengukuran</legend>
               <label class="mode-option">
@@ -223,6 +237,7 @@
           </div>
           <video id="result-video" controls playsinline></video>
           <img id="live-stream" alt="Stream CCTV hasil analisis" hidden>
+          <div id="multi-live-grid" class="multi-live-grid" hidden></div>
         </section>
 
         <section id="error-panel" class="error-panel" hidden aria-live="assertive">

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import threading
 import uuid
@@ -833,6 +834,92 @@ def create_job() -> tuple[Any, int] | Any:
     )
     thread.start()
     return jsonify(job_id=job_id), 202
+
+
+@app.post("/api/multi-rtsp-jobs")
+def create_multi_rtsp_jobs() -> tuple[Any, int] | Any:
+    """Start up to four independently calibrated RTSP analysis jobs."""
+    payload = request.get_json(silent=True) or {}
+    cameras = payload.get("cameras")
+    if not isinstance(cameras, list) or not 2 <= len(cameras) <= 4:
+        return jsonify(error="Masukkan dua sampai empat kamera RTSP."), 400
+    try:
+        mode = payload["mode"]
+        detector = payload["detector"]
+        confidence_threshold = float(payload["confidence_threshold"])
+        iou_threshold = float(payload["iou_threshold"])
+        if mode not in {"polygon", "gate"} or detector not in {"yolo", "bg"}:
+            raise ValueError("Mode atau metode deteksi tidak dikenali.")
+        if not 0 < confidence_threshold <= 1 or not 0 < iou_threshold <= 1:
+            raise ValueError("Nilai konfigurasi harus berada dalam rentang yang valid.")
+        bg_sub_config = parse_bg_sub_config(payload) if detector == "bg" else None
+        configured_cameras = []
+        for index, camera in enumerate(cameras, start=1):
+            url = str(camera.get("url", "")).strip()
+            if not url.lower().startswith("rtsp://"):
+                raise ValueError(f"URL Kamera {index} harus diawali rtsp://.")
+            name = secure_filename(str(camera.get("name", "") or f"Kamera-{index}")) or f"Kamera-{index}"
+            if mode == "polygon":
+                corridor_polygon = camera.get("corridor_polygon")
+                route_points = camera.get("route_points")
+                route_length_meters = float(camera.get("route_length_meters"))
+                if not isinstance(corridor_polygon, list) or len(corridor_polygon) < 3:
+                    raise ValueError(f"Kalibrasi koridor Kamera {index} belum lengkap.")
+                if (
+                    not isinstance(route_points, list)
+                    or len(route_points) < 2
+                    or not math.isfinite(route_length_meters)
+                    or route_length_meters <= 0
+                ):
+                    raise ValueError(f"Kalibrasi lintasan Kamera {index} belum lengkap.")
+                gates = gate_distances = None
+            else:
+                gates, gate_distances = parse_gate_definitions(json.dumps(camera["gate_definitions"]))
+                corridor_polygon = route_points = None
+                route_length_meters = None
+            configured_cameras.append(
+                (name, url, corridor_polygon, route_points, route_length_meters, gates, gate_distances)
+            )
+    except (KeyError, TypeError, ValueError) as error:
+        return jsonify(error=f"Konfigurasi multi-kamera tidak valid: {error}"), 400
+
+    RESULT_DIR.mkdir(parents=True, exist_ok=True)
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    jobs_payload = []
+    for name, url, corridor_polygon, route_points, route_length_meters, gates, gate_distances in configured_cameras:
+        job_id = uuid.uuid4().hex
+        target_path = RESULT_DIR / f"{job_id}-estimated.mp4"
+        with jobs_lock:
+            jobs[job_id] = {
+                "status": "processing",
+                "progress": 0,
+                "error": None,
+                "camera_name": name,
+                "stream_url": f"/api/jobs/{job_id}/stream",
+            }
+        thread = threading.Thread(
+            target=run_estimation,
+            kwargs={
+                "job_id": job_id,
+                "source_path": url,
+                "target_path": target_path,
+                "source_video_name": name,
+                "mode": mode,
+                "corridor_polygon": corridor_polygon,
+                "route_points": route_points,
+                "route_length_meters": route_length_meters,
+                "gates": gates,
+                "gate_distances": gate_distances,
+                "confidence_threshold": confidence_threshold,
+                "iou_threshold": iou_threshold,
+                "detector": detector,
+                "bg_sub_config": bg_sub_config,
+            },
+            daemon=True,
+        )
+        thread.start()
+        jobs_payload.append({"job_id": job_id, "camera_name": name})
+    return jsonify(jobs=jobs_payload), 202
 
 
 @app.get("/api/rtsp/preview")

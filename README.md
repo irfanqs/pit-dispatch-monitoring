@@ -85,6 +85,15 @@ OpenCV dan hasilnya dikirim ke browser sebagai MJPEG. Stream berjalan selama
 koneksi kamera tersedia. Log Excel dibuat ketika stream berhenti atau proses
 Flask dihentikan.
 
+### Dashboard 4 CCTV
+
+Pilih **Dashboard 4 CCTV** untuk menjalankan dua sampai empat kamera RTSP dalam
+satu halaman. Isi nama dan URL setiap kamera, lalu klik **Preview dan
+kalibrasi** satu per satu. Setiap kamera memiliki titik kalibrasi, tracker,
+stream hasil, dan laporan Excel harian yang terpisah. Dashboard menampilkan
+stream dalam grid 2x2; jika satu kamera bermasalah, job kamera lain tetap
+berjalan.
+
 ## Metode Pengukuran
 
 ### Poligon
