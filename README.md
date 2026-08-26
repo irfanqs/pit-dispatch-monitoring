@@ -18,6 +18,7 @@ Aplikasi menyediakan web UI lokal berbasis Flask dan mendukung dua sumber:
 - Anotasi bounding box, ID tracker, lintasan, dan kecepatan dalam km/jam.
 - Ekspor video hasil analisis dan log Excel.
 - Preview dan tampilan hasil realtime untuk CCTV RTSP.
+- Dashboard infografis untuk laporan Excel SpeedLens.
 
 ## Cara Kerja
 
@@ -135,6 +136,15 @@ sesi CCTV panjang tidak menumpuk dalam satu file. Setiap workbook memiliki
 sheet `Ringkasan Kendaraan`, `Deteksi`, dan `Kecepatan`. Track baru hanya dicatat
 setelah terdeteksi minimal lima frame untuk mengurangi false positive dan ID
 sesaat.
+
+## Dashboard Laporan
+
+Buka `http://127.0.0.1:5000/dashboard` untuk menampilkan laporan Excel yang
+sudah dihasilkan dalam format visual. Dashboard membaca workbook dari
+`data/logs` dan menyajikan jumlah kendaraan terkonfirmasi, deteksi, kecepatan
+rata-rata dan maksimum, tren per menit, distribusi kecepatan, aktivitas segmen,
+serta tabel tracker. Data mentah tetap dapat diunduh melalui tombol **Unduh
+Excel**.
 
 ## Script CLI Tambahan
 

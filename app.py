@@ -8,6 +8,7 @@ import os
 import threading
 import uuid
 from collections import defaultdict, deque
+from collections import Counter
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -990,6 +991,109 @@ def result_file(filename: str) -> Any:
 def log_file(filename: str) -> Any:
     """Serve an Excel detection log from the local logs directory."""
     return send_from_directory(LOG_DIR, filename)
+
+
+def report_file_path(filename: str) -> Path:
+    """Return a validated workbook path from the local report directory."""
+    path = LOG_DIR / secure_filename(filename)
+    if path.suffix.lower() != ".xlsx" or not path.is_file():
+        raise FileNotFoundError(filename)
+    return path
+
+
+@app.get("/dashboard")
+def dashboard() -> str:
+    """Render the visual analytics dashboard for generated Excel reports."""
+    return render_template("dashboard.html")
+
+
+@app.get("/api/reports")
+def list_reports() -> Any:
+    """List downloadable Excel reports ordered from newest to oldest."""
+    if not LOG_DIR.exists():
+        return jsonify(reports=[])
+    reports = [
+        {
+            "filename": path.name,
+            "modified_at": datetime.fromtimestamp(path.stat().st_mtime, LOG_TIMEZONE).isoformat(),
+        }
+        for path in sorted(LOG_DIR.glob("*.xlsx"), key=lambda item: item.stat().st_mtime, reverse=True)
+    ]
+    return jsonify(reports=reports)
+
+
+@app.get("/api/reports/<path:filename>")
+def report_data(filename: str) -> tuple[Any, int] | Any:
+    """Transform one generated workbook into dashboard-ready aggregate data."""
+    from openpyxl import load_workbook
+
+    try:
+        path = report_file_path(filename)
+        workbook = load_workbook(path, read_only=True, data_only=True)
+        required_sheets = {"Ringkasan", "Ringkasan Kendaraan", "Kecepatan"}
+        if not required_sheets.issubset(workbook.sheetnames):
+            raise ValueError("Workbook bukan laporan SpeedLens yang valid.")
+
+        summary = {
+            key: value
+            for key, value in workbook["Ringkasan"].iter_rows(min_row=3, values_only=True)
+            if key is not None
+        }
+        vehicles = []
+        for row in workbook["Ringkasan Kendaraan"].iter_rows(min_row=2, values_only=True):
+            if row[0] is None:
+                continue
+            vehicles.append(
+                {
+                    "tracker_id": int(row[0]),
+                    "first_frame": int(row[1]),
+                    "last_frame": int(row[2]),
+                    "samples": int(row[3]),
+                    "average_confidence": round(float(row[4] or 0), 2),
+                    "max_speed": int(row[5] or 0),
+                }
+            )
+        speed_rows = []
+        for row in workbook["Kecepatan"].iter_rows(min_row=2, values_only=True):
+            if row[0] is not None and row[6] is not None:
+                speed_rows.append(
+                    {
+                        "time_seconds": float(row[1] or 0),
+                        "segment": str(row[3] or "Tidak diketahui"),
+                        "speed": float(row[6]),
+                    }
+                )
+        speed_values = [item["speed"] for item in speed_rows]
+        speed_buckets = [("0-20", 0, 20), ("21-40", 21, 40), ("41-60", 41, 60), ("61-80", 61, 80), ("81+", 81, float("inf"))]
+        distribution = [
+            {"label": label, "count": sum(low <= speed <= high for speed in speed_values)}
+            for label, low, high in speed_buckets
+        ]
+        timeline: dict[int, list[float]] = defaultdict(list)
+        for item in speed_rows:
+            timeline[int(item["time_seconds"] // 60) * 60].append(item["speed"])
+        return jsonify(
+            filename=path.name,
+            summary=summary,
+            metrics={
+                "vehicles": len(vehicles),
+                "detections": int(summary.get("Jumlah deteksi", 0)),
+                "measurements": len(speed_rows),
+                "average_speed": round(sum(speed_values) / len(speed_values), 1) if speed_values else 0,
+                "max_speed": round(max(speed_values), 1) if speed_values else 0,
+            },
+            distribution=distribution,
+            timeline=[
+                {"minute": minute // 60, "average_speed": round(sum(speeds) / len(speeds), 1)}
+                for minute, speeds in sorted(timeline.items())
+            ],
+            segments=[{"name": name, "count": count} for name, count in Counter(item["segment"] for item in speed_rows).most_common()],
+            vehicles=sorted(vehicles, key=lambda item: item["max_speed"], reverse=True)[:100],
+        )
+    except FileNotFoundError:
+        return jsonify(error="Laporan tidak ditemukan."), 404
+    except (OSError, ValueError, TypeError, KeyError) as error:
+        return jsonify(error=f"Laporan tidak dapat dibaca: {error}"), 400
 
 
 @app.errorhandler(413)

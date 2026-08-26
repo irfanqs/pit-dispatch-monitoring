@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <title>Dashboard Laporan - SpeedLens</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  </head>
+  <body>
+    <main class="shell dashboard-shell">
+      <header class="topbar">
+        <a class="brand" href="/">SpeedLens</a>
+        <nav class="topnav" aria-label="Navigasi utama">
+          <a href="/">Analisis</a>
+          <a class="active" href="/dashboard">Dashboard laporan</a>
+        </nav>
+      </header>
+
+      <section class="report-hero" aria-labelledby="dashboard-title">
+        <div>
+          <span class="kicker">Laporan operasional</span>
+          <h1 id="dashboard-title">Data lapangan, terbaca dalam sekali pandang.</h1>
+          <p>Pilih laporan Excel SpeedLens untuk melihat ringkasan kendaraan, kecepatan, dan kualitas deteksi dalam tampilan visual.</p>
+        </div>
+        <label class="report-select-label" for="report-select">
+          <span>Pilih laporan Excel</span>
+          <select id="report-select" disabled>
+            <option>Memuat laporan...</option>
+          </select>
+        </label>
+      </section>
+
+      <section id="dashboard-empty" class="dashboard-empty" hidden>
+        <h2>Belum ada laporan untuk ditampilkan</h2>
+        <p>Jalankan analisis video atau sesi RTSP terlebih dahulu. File Excel yang dihasilkan akan muncul di sini.</p>
+        <a class="download-link" href="/">Buka analisis</a>
+      </section>
+
+      <section id="dashboard-content" hidden>
+        <div class="report-context">
+          <div>
+            <span id="report-source" class="report-source"></span>
+            <p id="report-meta"></p>
+          </div>
+          <a id="download-report" class="secondary-link" download>Unduh Excel</a>
+        </div>
+
+        <section class="metric-grid" aria-label="Ringkasan metrik">
+          <article class="metric-card"><span>Kendaraan terkonfirmasi</span><strong id="metric-vehicles">0</strong><small>Tracker stabil dalam laporan</small></article>
+          <article class="metric-card"><span>Deteksi tercatat</span><strong id="metric-detections">0</strong><small>Frame yang lolos pencatatan</small></article>
+          <article class="metric-card metric-accent"><span>Kecepatan rata-rata</span><strong><span id="metric-average-speed">0</span><em>km/h</em></strong><small>Dari seluruh pengukuran</small></article>
+          <article class="metric-card"><span>Kecepatan tertinggi</span><strong><span id="metric-max-speed">0</span><em>km/h</em></strong><small>Nilai puncak terukur</small></article>
+        </section>
+
+        <section class="dashboard-grid">
+          <article class="chart-panel chart-panel-wide">
+            <div class="panel-heading"><div><span class="kicker">Tren</span><h2>Kecepatan rata-rata per menit</h2></div><span id="measurement-count" class="panel-stat"></span></div>
+            <div id="speed-trend" class="line-chart" aria-label="Grafik tren kecepatan"></div>
+          </article>
+          <article class="chart-panel">
+            <div class="panel-heading"><div><span class="kicker">Sebaran</span><h2>Kelompok kecepatan</h2></div></div>
+            <div id="speed-distribution" class="bar-chart" aria-label="Grafik distribusi kecepatan"></div>
+          </article>
+          <article class="chart-panel">
+            <div class="panel-heading"><div><span class="kicker">Area</span><h2>Aktivitas per segmen</h2></div></div>
+            <div id="segment-list" class="segment-list"></div>
+          </article>
+        </section>
+
+        <section class="vehicle-panel" aria-labelledby="vehicle-title">
+          <div class="panel-heading"><div><span class="kicker">Kendaraan</span><h2 id="vehicle-title">Ringkasan tracker</h2></div><span>Diurutkan menurut kecepatan tertinggi</span></div>
+          <div class="table-scroll"><table><thead><tr><th>ID</th><th>Frame pertama</th><th>Frame terakhir</th><th>Sampel</th><th>Confidence rata-rata</th><th>Kecepatan maks.</th></tr></thead><tbody id="vehicle-table"></tbody></table></div>
+        </section>
+      </section>
+    </main>
+    <script src="{{ url_for('static', filename='dashboard.js') }}"></script>
+  </body>
+</html>
