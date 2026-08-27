@@ -6,6 +6,7 @@ import json
 import math
 import csv
 import io
+import logging
 import requests
 import os
 import threading
@@ -54,6 +55,8 @@ MATERIAL_COLUMNS = ("RP", "ON", "FD", "BL", "TS", "MP", "MC", "BD", "CL", "N P")
 MAX_MULTI_CAMERAS = 16
 
 app = Flask(__name__)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+logger = logging.getLogger("pit_dispatch_monitoring")
 app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024 * 1024
 jobs: dict[str, dict[str, Any]] = {}
 jobs_lock = threading.Lock()
@@ -165,6 +168,12 @@ def stop_requested(job_id: str) -> bool:
     """Return whether the operator requested an RTSP job to stop."""
     with jobs_lock:
         return bool(jobs.get(job_id, {}).get("stop_requested"))
+
+
+def update_connection(job_id: str, status: str, message: str) -> None:
+    """Update the connection state shown for an RTSP job."""
+    update_job(job_id, connection_status=status, connection_message=message)
+    logger.info("RTSP %s [%s] %s", job_id, status, message)
 
 
 def mux_h264_frame(output_container: Any, output_stream: Any, frame: Any) -> None:
@@ -434,6 +443,7 @@ def run_estimation(
             capture = cv2.VideoCapture(source_path)
             if not capture.isOpened():
                 raise ValueError("CCTV RTSP tidak dapat dibuka. Periksa URL, jaringan, dan kredensial kamera.")
+            update_connection(job_id, "connected", "Koneksi RTSP tersambung.")
             fps = capture.get(cv2.CAP_PROP_FPS) or 25.0
             width = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH))
             height = int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -551,9 +561,13 @@ def run_estimation(
                     while not stop_requested(job_id):
                         ok, next_frame = capture.read()
                         if not ok:
+                            update_connection(job_id, "reconnecting", "Stream terputus, mencoba reconnect...")
                             capture.release()
                             time.sleep(1)
-                            capture.open(source_path)
+                            if capture.open(source_path):
+                                update_connection(job_id, "connected", "Koneksi RTSP tersambung kembali.")
+                            else:
+                                update_connection(job_id, "reconnecting", "Reconnect gagal, mencoba lagi...")
                             continue
                         yield next_frame
 
@@ -763,6 +777,8 @@ def run_estimation(
             stream_url=f"/api/jobs/{job_id}/stream" if is_rtsp else None,
         )
     except Exception as error:
+        if isinstance(source_path, str) and source_path.lower().startswith("rtsp://"):
+            update_connection(job_id, "error", f"Koneksi RTSP gagal: {error}")
         update_job(job_id, status="error", error=str(error))
 
 
@@ -831,6 +847,8 @@ def create_job() -> tuple[Any, int] | Any:
             "error": None,
             "stream_url": f"/api/jobs/{job_id}/stream" if source_type == "rtsp" else None,
             "stop_requested": False,
+            "connection_status": "connecting" if source_type == "rtsp" else None,
+            "connection_message": "Menghubungkan ke RTSP..." if source_type == "rtsp" else None,
         }
     thread = threading.Thread(
         target=run_estimation,
@@ -917,6 +935,8 @@ def create_multi_rtsp_jobs() -> tuple[Any, int] | Any:
                 "camera_name": name,
                 "stream_url": f"/api/jobs/{job_id}/stream",
                 "stop_requested": False,
+                "connection_status": "connecting",
+                "connection_message": "Menghubungkan ke RTSP...",
             }
         thread = threading.Thread(
             target=run_estimation,

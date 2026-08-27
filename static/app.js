@@ -634,7 +634,7 @@ async function pollJob(jobId) {
     resultPanel.hidden = false;
     resultKicker.hidden = true;
     resultTitle.textContent = "Monitoring CCTV realtime";
-    statusDetail.textContent = "CCTV sedang diproses realtime.";
+    statusDetail.textContent = job.connection_message || "CCTV sedang diproses realtime.";
   }
   if (job.status === "processing") {
     window.setTimeout(() => pollJob(jobId).catch((error) => showError(error.message)), 1000);
@@ -673,6 +673,8 @@ async function pollMultiJobs(cameraJobs) {
         ? "Analisis dihentikan"
         : job.status === "complete"
           ? "Sesi selesai"
+          : job.connection_status === "reconnecting"
+            ? (job.connection_message || "Stream terputus, mencoba reconnect...")
           : "Realtime aktif";
     if (job.status !== "processing") {
       const stopButton = cameraJobs.find((cameraJob) => cameraJob.jobId === jobId)?.stopButton;
