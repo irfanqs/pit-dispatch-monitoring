@@ -9,6 +9,7 @@ import io
 import requests
 import os
 import threading
+import time
 import uuid
 from collections import defaultdict, deque
 from collections import Counter
@@ -24,6 +25,7 @@ BASE_DIR = Path(__file__).resolve().parent
 UPLOAD_DIR = BASE_DIR / "data" / "uploads"
 RESULT_DIR = BASE_DIR / "data" / "results"
 LOG_DIR = BASE_DIR / "data" / "logs"
+CAMERA_CONFIG_PATH = BASE_DIR / "data" / "camera-config.json"
 ALLOWED_EXTENSIONS = {"mp4", "mov", "avi", "mkv", "m4v"}
 DEFAULT_SOURCE = "1252,787;2298,803;5039,2159;-550,2159"
 YOLO_MODEL_PATH = BASE_DIR / "truck-hauler-ft.pt"
@@ -49,6 +51,7 @@ TRACK_CONFIRMATION_FRAMES = 5
 PRODUCTION_SHEET_ID = "1uzeFePgF0vGwEaEx61ZzCe3qlvew69o5hs0Q3oFdEzQ"
 PRODUCTION_SHEET_NAME = "DATA"
 MATERIAL_COLUMNS = ("RP", "ON", "FD", "BL", "TS", "MP", "MC", "BD", "CL", "N P")
+MAX_MULTI_CAMERAS = 16
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024 * 1024
@@ -156,6 +159,12 @@ def update_job(job_id: str, **values: Any) -> None:
     """Atomically merge updated processing state into a job record."""
     with jobs_lock:
         jobs[job_id].update(values)
+
+
+def stop_requested(job_id: str) -> bool:
+    """Return whether the operator requested an RTSP job to stop."""
+    with jobs_lock:
+        return bool(jobs.get(job_id, {}).get("stop_requested"))
 
 
 def mux_h264_frame(output_container: Any, output_stream: Any, frame: Any) -> None:
@@ -539,10 +548,13 @@ def run_estimation(
         try:
             if is_rtsp:
                 def rtsp_frames():
-                    while True:
+                    while not stop_requested(job_id):
                         ok, next_frame = capture.read()
                         if not ok:
-                            break
+                            capture.release()
+                            time.sleep(1)
+                            capture.open(source_path)
+                            continue
                         yield next_frame
 
                 frames = rtsp_frames()
@@ -743,7 +755,7 @@ def run_estimation(
 
         update_job(
             job_id,
-            status="complete",
+            status="stopped" if is_rtsp and stop_requested(job_id) else "complete",
             progress=100,
             result_url=None if is_rtsp else f"/results/{target_path.name}",
             log_url=f"/logs/{log_path.name}",
@@ -818,6 +830,7 @@ def create_job() -> tuple[Any, int] | Any:
             "progress": 0,
             "error": None,
             "stream_url": f"/api/jobs/{job_id}/stream" if source_type == "rtsp" else None,
+            "stop_requested": False,
         }
     thread = threading.Thread(
         target=run_estimation,
@@ -845,11 +858,11 @@ def create_job() -> tuple[Any, int] | Any:
 
 @app.post("/api/multi-rtsp-jobs")
 def create_multi_rtsp_jobs() -> tuple[Any, int] | Any:
-    """Start up to four independently calibrated RTSP analysis jobs."""
+    """Start independently calibrated RTSP analysis jobs."""
     payload = request.get_json(silent=True) or {}
     cameras = payload.get("cameras")
-    if not isinstance(cameras, list) or not 2 <= len(cameras) <= 4:
-        return jsonify(error="Masukkan dua sampai empat kamera RTSP."), 400
+    if not isinstance(cameras, list) or not 2 <= len(cameras) <= MAX_MULTI_CAMERAS:
+        return jsonify(error=f"Masukkan dua sampai {MAX_MULTI_CAMERAS} kamera RTSP."), 400
     try:
         mode = payload["mode"]
         detector = payload["detector"]
@@ -903,6 +916,7 @@ def create_multi_rtsp_jobs() -> tuple[Any, int] | Any:
                 "error": None,
                 "camera_name": name,
                 "stream_url": f"/api/jobs/{job_id}/stream",
+                "stop_requested": False,
             }
         thread = threading.Thread(
             target=run_estimation,
@@ -927,6 +941,56 @@ def create_multi_rtsp_jobs() -> tuple[Any, int] | Any:
         thread.start()
         jobs_payload.append({"job_id": job_id, "camera_name": name})
     return jsonify(jobs=jobs_payload), 202
+
+
+@app.post("/api/jobs/<job_id>/stop")
+def stop_job(job_id: str) -> tuple[Any, int] | Any:
+    """Request a running RTSP job to stop after its current frame."""
+    with jobs_lock:
+        job = jobs.get(job_id)
+        if job is None:
+            return jsonify(error="Pekerjaan tidak ditemukan."), 404
+        if not job.get("stream_url"):
+            return jsonify(error="Hanya stream RTSP yang dapat dihentikan."), 400
+        job["stop_requested"] = True
+    return jsonify(status="stopping"), 202
+
+
+@app.get("/api/camera-configurations")
+def get_camera_configuration() -> Any:
+    """Return the locally saved RTSP camera list without exposing it in source code."""
+    if not CAMERA_CONFIG_PATH.is_file():
+        return jsonify(cameras=[])
+    try:
+        payload = json.loads(CAMERA_CONFIG_PATH.read_text(encoding="utf-8"))
+        cameras = payload.get("cameras", [])
+        if not isinstance(cameras, list):
+            raise ValueError
+        return jsonify(cameras=cameras)
+    except (OSError, ValueError, json.JSONDecodeError):
+        return jsonify(error="Konfigurasi kamera lokal tidak dapat dibaca."), 500
+
+
+@app.put("/api/camera-configurations")
+def save_camera_configuration() -> tuple[Any, int] | Any:
+    """Persist the current camera names and RTSP URLs on the local machine."""
+    payload = request.get_json(silent=True) or {}
+    raw_cameras = payload.get("cameras")
+    if not isinstance(raw_cameras, list) or not 1 <= len(raw_cameras) <= MAX_MULTI_CAMERAS:
+        return jsonify(error=f"Simpan satu sampai {MAX_MULTI_CAMERAS} kamera."), 400
+    cameras = []
+    for index, camera in enumerate(raw_cameras, start=1):
+        name = str(camera.get("name", "") or f"Kamera {index}").strip()
+        url = str(camera.get("url", "")).strip()
+        if not url.lower().startswith("rtsp://"):
+            return jsonify(error=f"URL Kamera {index} harus diawali rtsp://."), 400
+        cameras.append({"name": name, "url": url})
+    try:
+        CAMERA_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        CAMERA_CONFIG_PATH.write_text(json.dumps({"cameras": cameras}, indent=2), encoding="utf-8")
+    except OSError as error:
+        return jsonify(error=f"Konfigurasi kamera tidak dapat disimpan: {error}"), 500
+    return jsonify(cameras=cameras), 200
 
 
 @app.get("/api/rtsp/preview")
@@ -969,7 +1033,7 @@ def job_stream(job_id: str) -> Response:
             if current_frame is not None and current_frame != last_frame:
                 last_frame = current_frame
                 yield b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + current_frame + b"\r\n"
-            if status in {"complete", "error"} and current_frame == last_frame:
+            if status in {"complete", "stopped", "error"} and current_frame == last_frame:
                 return
             time.sleep(0.04)
 

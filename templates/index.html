@@ -63,7 +63,12 @@
             <div>
               <span class="kicker">Dashboard multi-kamera</span>
               <h2 id="multi-camera-title">Hubungkan dan kalibrasi tiap kamera</h2>
-              <p>Masukkan dua hingga empat URL RTSP. Klik preview pada satu kamera, lalu lakukan kalibrasi sebelum berpindah ke kamera berikutnya.</p>
+              <p>Masukkan minimal dua URL RTSP. Tambahkan kamera sesuai kebutuhan, lalu preview dan kalibrasi setiap kamera sebelum analisis dimulai.</p>
+            </div>
+            <div class="multi-camera-actions">
+              <button id="add-camera" type="button" class="secondary-button">Tambah kamera</button>
+              <button id="load-camera-config" type="button" class="secondary-button">Muat konfigurasi</button>
+              <button id="save-camera-config" type="button" class="secondary-button">Simpan konfigurasi</button>
             </div>
             <div id="multi-camera-list" class="multi-camera-list"></div>
           </section>
@@ -232,7 +237,7 @@
         <section id="result-panel" class="result-panel" hidden aria-labelledby="result-title">
           <div class="result-heading">
             <div>
-              <span class="kicker">Selesai</span>
+              <span id="result-kicker" class="kicker">Selesai</span>
               <h2 id="result-title">Video hasil analisis</h2>
             </div>
             <div class="result-actions">

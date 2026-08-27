@@ -88,7 +88,7 @@ Flask dihentikan.
 
 ### Dashboard 4 CCTV
 
-Pilih **Dashboard 4 CCTV** untuk menjalankan dua sampai empat kamera RTSP dalam
+Pilih **Dashboard 4 CCTV** untuk menjalankan minimal dua kamera RTSP dalam
 satu halaman. Isi nama dan URL setiap kamera, lalu klik **Preview dan
 kalibrasi** satu per satu. Setiap kamera memiliki titik kalibrasi, tracker,
 stream hasil, dan laporan Excel harian yang terpisah. Dashboard menampilkan

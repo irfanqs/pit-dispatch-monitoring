@@ -5,6 +5,9 @@ const fileSourcePanel = document.querySelector("#file-source-panel");
 const rtspSourcePanel = document.querySelector("#rtsp-source-panel");
 const multiRtspSourcePanel = document.querySelector("#multi-rtsp-source-panel");
 const multiCameraList = document.querySelector("#multi-camera-list");
+const addCameraButton = document.querySelector("#add-camera");
+const loadCameraConfigButton = document.querySelector("#load-camera-config");
+const saveCameraConfigButton = document.querySelector("#save-camera-config");
 const rtspUrlInput = document.querySelector("#rtsp_url");
 const loadRtspButton = document.querySelector("#load-rtsp");
 const sourceInputs = document.querySelectorAll('input[name="source_type"]');
@@ -42,6 +45,8 @@ const statusDetail = document.querySelector("#status-detail");
 const progressValue = document.querySelector("#progress-value");
 const progressBar = document.querySelector("#progress-bar");
 const resultPanel = document.querySelector("#result-panel");
+const resultKicker = document.querySelector("#result-kicker");
+const resultTitle = document.querySelector("#result-title");
 const resultVideo = document.querySelector("#result-video");
 const liveStream = document.querySelector("#live-stream");
 const multiLiveGrid = document.querySelector("#multi-live-grid");
@@ -51,6 +56,7 @@ const errorPanel = document.querySelector("#error-panel");
 const errorMessage = document.querySelector("#error-message");
 const FORM_DRAFT_KEY = "speedlens.form-draft";
 const CAMERA_DRAFT_KEY = "speedlens.multi-camera-draft";
+const MAX_MULTI_CAMERAS = 16;
 let calibrationPoints = [];
 let corridorPoints = [];
 let routePoints = [];
@@ -60,7 +66,8 @@ let gateCount = 2;
 let gateDistances = [""];
 let rtspPreviewUrl;
 let activeMultiCamera = null;
-const multiCameraStates = Array.from({ length: 4 }, (_, index) => ({
+function createCameraState(index) {
+  return {
   name: `Kamera ${index + 1}`,
   url: "",
   corridorPoints: [],
@@ -71,7 +78,9 @@ const multiCameraStates = Array.from({ length: 4 }, (_, index) => ({
   gateDistances: [""],
   routeLength: "",
   previewUrl: null,
-}));
+  };
+}
+const multiCameraStates = Array.from({ length: 4 }, (_, index) => createCameraState(index));
 
 function readDraft(key) {
   try {
@@ -113,8 +122,9 @@ function restoreDrafts() {
   }
   const cameraDraft = readDraft(CAMERA_DRAFT_KEY);
   if (Array.isArray(cameraDraft)) {
-    cameraDraft.slice(0, multiCameraStates.length).forEach((camera, index) => {
+    cameraDraft.slice(0, MAX_MULTI_CAMERAS).forEach((camera, index) => {
       if (!camera || typeof camera !== "object") return;
+      if (!multiCameraStates[index]) multiCameraStates.push(createCameraState(index));
       const state = multiCameraStates[index];
       state.name = typeof camera.name === "string" ? camera.name : state.name;
       state.url = typeof camera.url === "string" ? camera.url : "";
@@ -197,8 +207,23 @@ function renderMultiCameraList() {
     previewButton.textContent = activeMultiCamera === index ? "Sedang dikalibrasi" : "Preview dan kalibrasi";
     previewButton.addEventListener("click", () => activateMultiCamera(index));
     card.append(nameLabel, urlLabel, previewButton);
+    if (multiCameraStates.length > 2) {
+      const removeButton = document.createElement("button");
+      removeButton.type = "button";
+      removeButton.className = "secondary-button";
+      removeButton.textContent = "Hapus kamera";
+      removeButton.addEventListener("click", () => {
+        if (activeMultiCamera === index) activeMultiCamera = null;
+        multiCameraStates.splice(index, 1);
+        multiCameraStates.forEach((state, stateIndex) => { if (!state.name) state.name = `Kamera ${stateIndex + 1}`; });
+        renderMultiCameraList();
+        saveDrafts();
+      });
+      card.append(removeButton);
+    }
     multiCameraList.append(card);
   });
+  addCameraButton.disabled = multiCameraStates.length >= MAX_MULTI_CAMERAS;
 }
 
 async function activateMultiCamera(index) {
@@ -607,6 +632,8 @@ async function pollJob(jobId) {
     liveStream.hidden = false;
     resultVideo.hidden = true;
     resultPanel.hidden = false;
+    resultKicker.hidden = true;
+    resultTitle.textContent = "Monitoring CCTV realtime";
     statusDetail.textContent = "CCTV sedang diproses realtime.";
   }
   if (job.status === "processing") {
@@ -617,8 +644,11 @@ async function pollJob(jobId) {
     showError(job.error || "Terjadi kesalahan saat memproses video.");
     return;
   }
-  statusLabel.textContent = "Analisis selesai";
-  statusDetail.textContent = "Video hasil siap diputar atau diunduh.";
+  const isRealtime = Boolean(job.stream_url && !job.result_url);
+  statusLabel.textContent = isRealtime ? "Sesi realtime selesai" : "Analisis selesai";
+  statusDetail.textContent = isRealtime
+    ? "Stream telah berhenti. Laporan Excel sesi ini siap diunduh."
+    : "Video hasil siap diputar atau diunduh.";
   if (job.result_url) {
     resultVideo.src = job.result_url;
     resultVideo.hidden = false;
@@ -637,7 +667,20 @@ async function pollMultiJobs(cameraJobs) {
     const response = await fetch(`/api/jobs/${jobId}`);
     const job = await response.json();
     if (!response.ok) throw new Error(job.error || "Status kamera tidak tersedia.");
-    status.textContent = job.status === "error" ? `Error: ${job.error}` : job.status === "complete" ? "Sesi selesai" : "Realtime aktif";
+    status.textContent = job.status === "error"
+      ? `Error: ${job.error}`
+      : job.status === "stopped"
+        ? "Analisis dihentikan"
+        : job.status === "complete"
+          ? "Sesi selesai"
+          : "Realtime aktif";
+    if (job.status !== "processing") {
+      const stopButton = cameraJobs.find((cameraJob) => cameraJob.jobId === jobId)?.stopButton;
+      if (stopButton) {
+        stopButton.disabled = true;
+        stopButton.textContent = job.status === "stopped" ? "Sudah dihentikan" : "Tidak aktif";
+      }
+    }
     return job.status;
   }));
   if (states.some((state) => state === "processing")) {
@@ -702,9 +745,18 @@ async function startMultiAnalysis() {
     image.src = `/api/jobs/${job.job_id}/stream`;
     const status = document.createElement("small");
     status.textContent = "Menghubungkan stream...";
-    card.append(title, image, status);
+    const stopButton = document.createElement("button");
+    stopButton.type = "button";
+    stopButton.className = "secondary-button stop-camera";
+    stopButton.textContent = "Stop analisis";
+    stopButton.addEventListener("click", async () => {
+      stopButton.disabled = true;
+      stopButton.textContent = "Menghentikan...";
+      await stopJob(job.job_id, status, stopButton);
+    });
+    card.append(title, image, status, stopButton);
     multiLiveGrid.append(card);
-    return { jobId: job.job_id, status };
+    return { jobId: job.job_id, status, stopButton };
   });
   liveStream.hidden = true;
   resultVideo.hidden = true;
@@ -712,6 +764,8 @@ async function startMultiAnalysis() {
   downloadLink.hidden = true;
   downloadLogLink.hidden = true;
   resultPanel.hidden = false;
+  resultKicker.hidden = true;
+  resultTitle.textContent = "Monitoring CCTV realtime";
   statusLabel.textContent = "Dashboard CCTV berjalan";
   statusDetail.textContent = "Setiap kamera diproses dan dicatat secara terpisah.";
   pollMultiJobs(cameraJobs).catch((error) => showError(error.message));
@@ -721,6 +775,8 @@ form.addEventListener("submit", async (event) => {
   event.preventDefault();
   errorPanel.hidden = true;
   resultPanel.hidden = true;
+  resultKicker.hidden = false;
+  resultTitle.textContent = "Video hasil analisis";
   resultVideo.hidden = true;
   liveStream.hidden = true;
   multiLiveGrid.hidden = true;
@@ -754,3 +810,74 @@ form.addEventListener("input", saveDrafts);
 form.addEventListener("change", saveDrafts);
 restoreDrafts();
 setSourceSettings();
+
+addCameraButton.addEventListener("click", addNewCamera);
+loadCameraConfigButton.addEventListener("click", loadCameraConfig);
+saveCameraConfigButton.addEventListener("click", saveCameraConfig);
+
+function addNewCamera() {
+  if (multiCameraStates.length >= MAX_MULTI_CAMERAS) return;
+  const newIndex = multiCameraStates.length;
+  multiCameraStates.push(createCameraState(newIndex));
+  renderMultiCameraList();
+  addCameraButton.disabled = multiCameraStates.length >= MAX_MULTI_CAMERAS;
+}
+
+async function loadCameraConfig() {
+  try {
+    const response = await fetch("/api/camera-configurations");
+    if (!response.ok) throw new Error("Gagal memuat konfigurasi kamera.");
+    const data = await response.json();
+    const saved = data.cameras || [];
+    if (Array.isArray(saved)) {
+      saved.forEach((camera, index) => {
+        if (index < multiCameraStates.length) {
+          multiCameraStates[index].name = camera.name || `Kamera ${index + 1}`;
+          multiCameraStates[index].url = camera.url || "";
+        } else {
+          const state = createCameraState(multiCameraStates.length);
+          state.name = camera.name || state.name;
+          state.url = camera.url || "";
+          multiCameraStates.push(state);
+        }
+      });
+    }
+    renderMultiCameraList();
+    addCameraButton.disabled = multiCameraStates.length >= MAX_MULTI_CAMERAS;
+  } catch (error) {
+    showError(error.message);
+  }
+}
+
+async function saveCameraConfig() {
+  try {
+    const payload = multiCameraStates
+      .filter((camera) => camera.url.trim())
+      .map(({ previewUrl, ...camera }) => ({ name: camera.name, url: camera.url }));
+    if (!payload.length) throw new Error("Masukkan minimal satu URL RTSP sebelum menyimpan.");
+    const response = await fetch("/api/camera-configurations", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cameras: payload }),
+    });
+    if (!response.ok) throw new Error("Gagal menyimpan konfigurasi kamera.");
+    const data = await response.json();
+    statusPanel.hidden = false;
+    statusLabel.textContent = "Konfigurasi kamera tersimpan";
+    statusDetail.textContent = `${data.cameras.length} kamera siap digunakan saat aplikasi dijalankan kembali.`;
+  } catch (error) {
+    showError(error.message);
+  }
+}
+
+async function stopJob(jobId, statusElement, stopButton) {
+  try {
+    const response = await fetch(`/api/jobs/${jobId}/stop`, { method: "POST" });
+    if (!response.ok) throw new Error("Gagal menghentikan kamera.");
+    statusElement.textContent = "Menghentikan kamera...";
+  } catch (error) {
+    statusElement.textContent = error.message;
+    stopButton.disabled = false;
+    stopButton.textContent = "Stop analisis";
+  }
+}
