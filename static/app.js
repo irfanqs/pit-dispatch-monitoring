@@ -401,13 +401,14 @@ function drawCalibration() {
     });
   }
   const activePoints = selectedMode() === "polygon" ? [...corridorPoints, ...routePoints] : calibrationPoints;
+  const pointRadius = Math.max(4, calibrationCanvas.width / 220);
   activePoints.forEach((point, index) => {
     context.beginPath();
-    context.arc(point.x, point.y, Math.max(8, calibrationCanvas.width / 100), 0, Math.PI * 2);
+    context.arc(point.x, point.y, pointRadius, 0, Math.PI * 2);
     context.fillStyle = "#006f62";
     context.fill();
     context.fillStyle = "#ecfffb";
-    context.fillText(String(index + 1), point.x + 12, point.y - 12);
+    context.fillText(String(index + 1), point.x + pointRadius + 4, point.y - pointRadius - 4);
   });
 }
 
