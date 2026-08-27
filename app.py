@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import json
 import math
+import csv
+import io
+import requests
 import os
 import threading
 import uuid
@@ -43,6 +46,9 @@ except ZoneInfoNotFoundError:
     # Windows may not ship the IANA timezone database; Jakarta is UTC+7 year-round.
     LOG_TIMEZONE = timezone(timedelta(hours=7))
 TRACK_CONFIRMATION_FRAMES = 5
+PRODUCTION_SHEET_ID = "1uzeFePgF0vGwEaEx61ZzCe3qlvew69o5hs0Q3oFdEzQ"
+PRODUCTION_SHEET_NAME = "DATA"
+MATERIAL_COLUMNS = ("RP", "ON", "FD", "BL", "TS", "MP", "MC", "BD", "CL", "N P")
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024 * 1024
@@ -1001,10 +1007,97 @@ def report_file_path(filename: str) -> Path:
     return path
 
 
+def parse_sheet_number(value: str | None) -> float:
+    """Parse the mixed Indonesian numeric formatting used by the production sheet."""
+    raw = (value or "").strip().replace(" ", "").replace("-", "")
+    if not raw:
+        return 0.0
+    if raw.endswith("%"):
+        return parse_sheet_number(raw[:-1]) / 100
+    if "," in raw:
+        return float(raw.replace(".", "").replace(",", "."))
+    if raw.count(".") > 1 or ("." in raw and len(raw.rsplit(".", 1)[1]) == 3):
+        return float(raw.replace(".", ""))
+    return float(raw)
+
+
+def parse_sheet_date(value: str) -> datetime:
+    """Parse the abbreviated Indonesian/English dates in the production sheet."""
+    months = {"Jan": "Jan", "Feb": "Feb", "Mar": "Mar", "Apr": "Apr", "Mei": "May", "Jun": "Jun", "Jul": "Jul", "Agu": "Aug", "Sep": "Sep", "Okt": "Oct", "Nov": "Nov", "Des": "Dec"}
+    day, month, year = value.strip().split("-", maxsplit=2)
+    return datetime.strptime(f"{day}-{months[month]}-{year}", "%d-%b-%y")
+
+
+def load_production_rows() -> list[dict[str, Any]]:
+    """Load daily production rows from the public Google Sheet CSV export."""
+    response = requests.get(
+        f"https://docs.google.com/spreadsheets/d/{PRODUCTION_SHEET_ID}/gviz/tq",
+        params={"tqx": "out:csv", "sheet": PRODUCTION_SHEET_NAME},
+        timeout=20,
+    )
+    response.raise_for_status()
+    rows = []
+    for raw_row in csv.DictReader(io.StringIO(response.text)):
+        row = {key.strip(): value for key, value in raw_row.items() if key is not None}
+        try:
+            row["parsed_date"] = parse_sheet_date(row["DATE"])
+        except (KeyError, ValueError):
+            continue
+        rows.append(row)
+    return rows
+
+
 @app.get("/dashboard")
 def dashboard() -> str:
     """Render the visual analytics dashboard for generated Excel reports."""
     return render_template("dashboard.html")
+
+
+@app.get("/production-dashboard")
+def production_dashboard() -> str:
+    """Render the mining production dashboard backed by the public Sheet."""
+    return render_template("production_dashboard.html")
+
+
+@app.get("/api/production")
+def production_data() -> tuple[Any, int] | Any:
+    """Aggregate the public daily production sheet for the selected date range."""
+    try:
+        rows = load_production_rows()
+        start = request.args.get("start")
+        end = request.args.get("end")
+        if start:
+            start_date = datetime.strptime(start, "%Y-%m-%d")
+            rows = [row for row in rows if row["parsed_date"] >= start_date]
+        if end:
+            end_date = datetime.strptime(end, "%Y-%m-%d")
+            rows = [row for row in rows if row["parsed_date"] <= end_date]
+        if not rows:
+            return jsonify(error="Tidak ada data pada rentang tanggal ini."), 404
+        total = lambda column: round(sum(parse_sheet_number(row.get(column)) for row in rows), 2)
+        plan_ob = total("PLAN OB")
+        actual_ob = total("ACT OB")
+        plan_coal = total("PLAN COAL")
+        actual_coal = total("ACT COAL")
+        pa_plan = total("PLAN PA PROD EQP")
+        pa_actual = total("ACT PA PROD EQP")
+        pa_factor = pa_actual / pa_plan if pa_plan else 1
+        pa_result = round(plan_ob * pa_factor, 2)
+        materials = [{"name": column, "value": total(column)} for column in MATERIAL_COLUMNS]
+        return jsonify(
+            range={"start": min(row["parsed_date"] for row in rows).date().isoformat(), "end": max(row["parsed_date"] for row in rows).date().isoformat()},
+            ob={"actual": actual_ob, "plan": plan_ob, "progress": round(actual_ob / plan_ob * 100, 1) if plan_ob else 0},
+            coal={"actual": actual_coal, "plan": plan_coal, "progress": round(actual_coal / plan_coal * 100, 1) if plan_coal else 0},
+            materials=materials,
+            waterfall=[
+                {"name": "Plan", "value": plan_ob, "total": True},
+                {"name": "PA", "value": round(pa_result - plan_ob, 2), "total": False},
+                {"name": "Setelah PA", "value": pa_result, "total": True},
+            ],
+            waterfall_note="Dampak PA dihitung dari perbandingan total ACT PA PROD EQP terhadap PLAN PA PROD EQP.",
+        )
+    except (OSError, ValueError, requests.RequestException) as error:
+        return jsonify(error=f"Data produksi tidak dapat dimuat: {error}"), 502
 
 
 @app.get("/api/reports")

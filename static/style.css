@@ -169,6 +169,24 @@ select { width: 100%; padding: 12px; color: var(--text); background: var(--surfa
 .segment-row i { grid-column: 1 / -1; display: block; height: 5px; border-radius: 99px; background: var(--surface-muted); overflow: hidden; }
 .segment-row i::after { content: ""; display: block; width: var(--bar-width); height: 100%; background: var(--accent); }
 .vehicle-panel { margin-top: 16px; }
+.date-filter { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.date-filter label { display: grid; gap: 5px; color: var(--muted); font-size: 0.78rem; }
+.date-filter button { grid-column: 1 / -1; }
+.production-error { margin-top: 20px; color: var(--danger); }
+.production-kpi { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin: 22px 0 16px; }
+.production-card { padding: 22px; border-radius: 10px; background: var(--surface); border: 1px solid var(--line); }
+.production-card h2 { margin: 0; font-size: 1.1rem; }
+.production-card strong { display: block; margin: 20px 0 4px; font-size: clamp(2rem, 4vw, 3.4rem); letter-spacing: -0.06em; }
+.production-card p, .chart-note { color: var(--muted); margin: 0; }
+.production-card i { display: block; height: 10px; margin-top: 18px; border-radius: 99px; overflow: hidden; background: var(--surface-muted); }
+.production-card i span { display: block; height: 100%; background: var(--accent); }
+.material-chart, .waterfall-chart { display: grid; gap: 11px; }
+.material-row, .waterfall-row { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; gap: 10px; font-size: 0.85rem; }
+.material-row i, .waterfall-row i { height: 14px; overflow: hidden; background: var(--surface-muted); border-radius: 3px; }
+.material-row i b, .waterfall-row i b { display: block; height: 100%; background: var(--accent); }
+.waterfall-row.loss i b { background: var(--danger); }
+.waterfall-row.total i b { background: #12717b; }
+.chart-note { margin-top: 18px; font-size: 0.82rem; line-height: 1.45; }
 .table-scroll { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.88rem; }
 th { padding: 10px 12px; color: var(--muted); font-size: 0.75rem; font-weight: 700; white-space: nowrap; }
@@ -188,6 +206,7 @@ td:last-child { color: var(--accent); font-weight: 750; }
   .calibration-actions button { width: 100%; }
   .mode-selector { grid-template-columns: 1fr; }
   .report-hero, .metric-grid, .dashboard-grid { grid-template-columns: 1fr; }
+  .production-kpi { grid-template-columns: 1fr; }
   .report-context { align-items: stretch; flex-direction: column; }
   .chart-panel-wide { grid-row: auto; }
   .topnav { width: 100%; }

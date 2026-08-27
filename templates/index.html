@@ -14,6 +14,7 @@
         <nav class="topnav" aria-label="Navigasi utama">
           <a class="active" href="/">Analisis</a>
           <a href="/dashboard">Dashboard laporan</a>
+          <a href="/production-dashboard">Produksi tambang</a>
         </nav>
       </header>
 
@@ -31,11 +32,12 @@
               <span>Upload video</span>
               <small>Analisis rekaman dan hasil MP4.</small>
             </label>
-            <label class="mode-option">
+            <!-- Single-camera RTSP remains supported by the backend but is hidden from the UI. -->
+            <!-- <label class="mode-option">
               <input type="radio" name="source_type" value="rtsp">
               <span>CCTV realtime (RTSP)</span>
               <small>Proses stream langsung dari kamera.</small>
-            </label>
+            </label> -->
             <label class="mode-option">
               <input type="radio" name="source_type" value="multi_rtsp">
               <span>Dashboard 4 CCTV</span>
@@ -51,12 +53,12 @@
               <span id="file-name" class="file-name">Belum ada file dipilih</span>
             </label>
           </div>
-          <div id="rtsp-source-panel" class="upload-panel" hidden>
+          <!-- <div id="rtsp-source-panel" class="upload-panel" hidden>
             <label for="rtsp_url">URL RTSP CCTV</label>
             <input id="rtsp_url" name="rtsp_url" type="url" placeholder="rtsp://username:password@192.168.1.10:554/stream">
             <button id="load-rtsp" type="button" class="secondary-button">Hubungkan untuk preview</button>
             <small>Pastikan komputer ini dapat mengakses kamera dan URL tidak diblokir firewall.</small>
-          </div>
+          </div> -->
           <section id="multi-rtsp-source-panel" class="multi-camera-config" hidden aria-labelledby="multi-camera-title">
             <div>
               <span class="kicker">Dashboard multi-kamera</span>

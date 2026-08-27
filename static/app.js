@@ -80,10 +80,10 @@ function setSourceSettings() {
   const isRtsp = source === "rtsp";
   const isMultiRtsp = source === "multi_rtsp";
   fileSourcePanel.hidden = source !== "file";
-  rtspSourcePanel.hidden = !isRtsp;
+  if (rtspSourcePanel) rtspSourcePanel.hidden = !isRtsp;
   multiRtspSourcePanel.hidden = !isMultiRtsp;
   fileInput.required = source === "file";
-  rtspUrlInput.required = isRtsp;
+  if (rtspUrlInput) rtspUrlInput.required = isRtsp;
   if (isMultiRtsp) renderMultiCameraList();
 }
 
@@ -406,7 +406,7 @@ sourceInputs.forEach((input) => input.addEventListener("change", () => {
   }
 }));
 
-loadRtspButton.addEventListener("click", async () => {
+loadRtspButton?.addEventListener("click", async () => {
   const url = rtspUrlInput.value.trim();
   if (!url.startsWith("rtsp://")) {
     setPreviewStatus("URL harus diawali rtsp://.", "error");
