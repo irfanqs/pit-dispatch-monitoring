@@ -1125,7 +1125,7 @@ def report_data(filename: str) -> tuple[Any, int] | Any:
         workbook = load_workbook(path, read_only=True, data_only=True)
         required_sheets = {"Ringkasan", "Ringkasan Kendaraan", "Kecepatan"}
         if not required_sheets.issubset(workbook.sheetnames):
-            raise ValueError("Workbook bukan laporan SpeedLens yang valid.")
+            raise ValueError("Workbook bukan laporan Pit Dispatch Monitoring yang valid.")
 
         summary = {
             key: value

@@ -1,6 +1,6 @@
-# SpeedLens
+# Pit Dispatch Monitoring
 
-SpeedLens adalah aplikasi computer vision untuk mendeteksi kendaraan,
+Pit Dispatch Monitoring adalah aplikasi computer vision untuk mendeteksi kendaraan,
 melacak pergerakannya, dan memperkirakan kecepatannya dari kamera jalan.
 Aplikasi menyediakan web UI lokal berbasis Flask dan mendukung dua sumber:
 
@@ -18,7 +18,7 @@ Aplikasi menyediakan web UI lokal berbasis Flask dan mendukung dua sumber:
 - Anotasi bounding box, ID tracker, lintasan, dan kecepatan dalam km/jam.
 - Ekspor video hasil analisis dan log Excel.
 - Preview dan tampilan hasil realtime untuk CCTV RTSP.
-- Dashboard infografis untuk laporan Excel SpeedLens.
+- Dashboard infografis untuk laporan Excel Pit Dispatch Monitoring.
 
 ## Cara Kerja
 

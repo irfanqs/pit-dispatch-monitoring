@@ -49,6 +49,8 @@ const downloadLink = document.querySelector("#download-link");
 const downloadLogLink = document.querySelector("#download-log-link");
 const errorPanel = document.querySelector("#error-panel");
 const errorMessage = document.querySelector("#error-message");
+const FORM_DRAFT_KEY = "speedlens.form-draft";
+const CAMERA_DRAFT_KEY = "speedlens.multi-camera-draft";
 let calibrationPoints = [];
 let corridorPoints = [];
 let routePoints = [];
@@ -70,6 +72,62 @@ const multiCameraStates = Array.from({ length: 4 }, (_, index) => ({
   routeLength: "",
   previewUrl: null,
 }));
+
+function readDraft(key) {
+  try {
+    return JSON.parse(localStorage.getItem(key) || "null");
+  } catch {
+    return null;
+  }
+}
+
+function saveDrafts() {
+  saveActiveMultiCalibration();
+  const formDraft = {};
+  form.querySelectorAll("input, select").forEach((element) => {
+    if (element.type === "file" || (element.type === "radio" && !element.checked)) return;
+    formDraft[element.id || element.name] = element.value;
+  });
+  const cameraDraft = multiCameraStates.map(({ previewUrl, ...camera }) => camera);
+  try {
+    localStorage.setItem(FORM_DRAFT_KEY, JSON.stringify(formDraft));
+    localStorage.setItem(CAMERA_DRAFT_KEY, JSON.stringify(cameraDraft));
+  } catch {
+    // Private browsing or a full storage quota must not block analysis.
+  }
+}
+
+function restoreDrafts() {
+  const formDraft = readDraft(FORM_DRAFT_KEY);
+  if (formDraft) {
+    Object.entries(formDraft).forEach(([key, value]) => {
+      const element = document.getElementById(key);
+      if (element && element.type !== "file") {
+        element.value = value;
+        return;
+      }
+      document.querySelectorAll(`[name="${key}"]`).forEach((input) => {
+        if (input.value === value) input.checked = true;
+      });
+    });
+  }
+  const cameraDraft = readDraft(CAMERA_DRAFT_KEY);
+  if (Array.isArray(cameraDraft)) {
+    cameraDraft.slice(0, multiCameraStates.length).forEach((camera, index) => {
+      if (!camera || typeof camera !== "object") return;
+      const state = multiCameraStates[index];
+      state.name = typeof camera.name === "string" ? camera.name : state.name;
+      state.url = typeof camera.url === "string" ? camera.url : "";
+      state.corridorPoints = Array.isArray(camera.corridorPoints) ? camera.corridorPoints : [];
+      state.routePoints = Array.isArray(camera.routePoints) ? camera.routePoints : [];
+      state.calibrationPoints = Array.isArray(camera.calibrationPoints) ? camera.calibrationPoints : [];
+      state.polygonStep = typeof camera.polygonStep === "string" ? camera.polygonStep : "corridor";
+      state.gateCount = Number.isInteger(camera.gateCount) && camera.gateCount >= 2 ? camera.gateCount : 2;
+      state.gateDistances = Array.isArray(camera.gateDistances) ? camera.gateDistances : [""];
+      state.routeLength = typeof camera.routeLength === "string" ? camera.routeLength : "";
+    });
+  }
+}
 
 function selectedSource() {
   return document.querySelector('input[name="source_type"]:checked').value;
@@ -123,7 +181,7 @@ function renderMultiCameraList() {
     nameLabel.textContent = `Nama Kamera ${index + 1}`;
     const nameInput = document.createElement("input");
     nameInput.value = camera.name;
-    nameInput.addEventListener("input", () => { camera.name = nameInput.value; });
+    nameInput.addEventListener("input", () => { camera.name = nameInput.value; saveDrafts(); });
     nameLabel.append(nameInput);
     const urlLabel = document.createElement("label");
     urlLabel.textContent = "URL RTSP";
@@ -131,7 +189,7 @@ function renderMultiCameraList() {
     urlInput.type = "url";
     urlInput.placeholder = "rtsp://username:password@kamera:554/stream";
     urlInput.value = camera.url;
-    urlInput.addEventListener("input", () => { camera.url = urlInput.value.trim(); });
+    urlInput.addEventListener("input", () => { camera.url = urlInput.value.trim(); saveDrafts(); });
     urlLabel.append(urlInput);
     const previewButton = document.createElement("button");
     previewButton.type = "button";
@@ -521,8 +579,12 @@ addGateButton.addEventListener("click", () => {
 });
 
 window.addEventListener("beforeunload", () => {
+  saveDrafts();
   if (calibrationUrl) URL.revokeObjectURL(calibrationUrl);
   if (rtspPreviewUrl) URL.revokeObjectURL(rtspPreviewUrl);
+  multiCameraStates.forEach((camera) => {
+    if (camera.previewUrl) URL.revokeObjectURL(camera.previewUrl);
+  });
 });
 
 function showError(message) {
@@ -688,4 +750,7 @@ form.addEventListener("submit", async (event) => {
   }
 });
 
+form.addEventListener("input", saveDrafts);
+form.addEventListener("change", saveDrafts);
+restoreDrafts();
 setSourceSettings();
