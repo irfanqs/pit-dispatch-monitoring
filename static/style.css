@@ -126,7 +126,6 @@ video { width: 100%; display: block; border-radius: 9px; background: #111; }
 img { max-width: 100%; }
 .error-panel { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, var(--line)); }
 .error-panel p { color: var(--danger); }
-.dashboard-shell { max-width: 1360px; }
 .report-hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 340px); align-items: end; gap: 40px; padding: 42px 0 30px; border-bottom: 1px solid var(--line); }
 .report-hero h1 { max-width: 720px; font-size: clamp(2.3rem, 5vw, 4.5rem); }
 .report-hero p { max-width: 620px; margin: 0; color: var(--muted); line-height: 1.6; }
