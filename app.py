@@ -170,6 +170,15 @@ def stop_requested(job_id: str) -> bool:
         return bool(jobs.get(job_id, {}).get("stop_requested"))
 
 
+def consume_log_snapshot_request(job_id: str) -> bool:
+    with jobs_lock:
+        job = jobs.get(job_id)
+        if not job or not job.get("snapshot_requested"):
+            return False
+        job["snapshot_requested"] = False
+        return True
+
+
 def update_connection(job_id: str, status: str, message: str) -> None:
     """Update the connection state shown for an RTSP job."""
     update_job(job_id, connection_status=status, connection_message=message)
@@ -544,6 +553,11 @@ def run_estimation(
             )
             if path not in log_paths:
                 log_paths.append(path)
+            update_job(
+                job_id,
+                log_url=f"/logs/{path.name}",
+                log_revision=datetime.now(timezone.utc).isoformat(),
+            )
             return path
 
         output_container = None
@@ -583,6 +597,8 @@ def run_estimation(
                         speed_logs.clear()
                         logged_speeds.clear()
                         log_date = frame_date
+                    if consume_log_snapshot_request(job_id):
+                        save_current_log(log_date)
                 if bg_detector is not None:
                     detections = bg_detector.process(frame)
                     if detections is None:
@@ -849,6 +865,9 @@ def create_job() -> tuple[Any, int] | Any:
             "stop_requested": False,
             "connection_status": "connecting" if source_type == "rtsp" else None,
             "connection_message": "Menghubungkan ke RTSP..." if source_type == "rtsp" else None,
+            "snapshot_requested": False,
+            "log_url": None,
+            "log_revision": None,
         }
     thread = threading.Thread(
         target=run_estimation,
@@ -937,6 +956,9 @@ def create_multi_rtsp_jobs() -> tuple[Any, int] | Any:
                 "stop_requested": False,
                 "connection_status": "connecting",
                 "connection_message": "Menghubungkan ke RTSP...",
+                "snapshot_requested": False,
+                "log_url": None,
+                "log_revision": None,
             }
         thread = threading.Thread(
             target=run_estimation,
@@ -974,6 +996,24 @@ def stop_job(job_id: str) -> tuple[Any, int] | Any:
             return jsonify(error="Hanya stream RTSP yang dapat dihentikan."), 400
         job["stop_requested"] = True
     return jsonify(status="stopping"), 202
+
+
+@app.post("/api/jobs/<job_id>/log-snapshot")
+def request_log_snapshot(job_id: str) -> tuple[Any, int] | Any:
+    """Queue an up-to-date Excel log snapshot for an RTSP job."""
+    with jobs_lock:
+        job = jobs.get(job_id)
+        if job is None:
+            return jsonify(error="Pekerjaan tidak ditemukan."), 404
+        if not job.get("stream_url"):
+            return jsonify(error="Snapshot log hanya tersedia untuk stream RTSP."), 400
+        if job.get("status") not in {"processing", "stopped", "complete"}:
+            return jsonify(error="Sesi RTSP belum siap membuat log."), 409
+        if job.get("status") != "processing":
+            return jsonify(status="ready", log_url=job.get("log_url")), 200
+        job["snapshot_requested"] = True
+        revision = job.get("log_revision")
+    return jsonify(status="queued", previous_revision=revision), 202
 
 
 @app.get("/api/camera-configurations")

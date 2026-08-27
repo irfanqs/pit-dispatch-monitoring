@@ -52,6 +52,7 @@ const liveStream = document.querySelector("#live-stream");
 const multiLiveGrid = document.querySelector("#multi-live-grid");
 const downloadLink = document.querySelector("#download-link");
 const downloadLogLink = document.querySelector("#download-log-link");
+const snapshotLogButton = document.querySelector("#snapshot-log-button");
 const errorPanel = document.querySelector("#error-panel");
 const errorMessage = document.querySelector("#error-message");
 const FORM_DRAFT_KEY = "speedlens.form-draft";
@@ -634,6 +635,8 @@ async function pollJob(jobId) {
     resultPanel.hidden = false;
     resultKicker.hidden = true;
     resultTitle.textContent = "Monitoring CCTV realtime";
+    snapshotLogButton.hidden = false;
+    snapshotLogButton.onclick = () => requestLogSnapshot(jobId, snapshotLogButton);
     statusDetail.textContent = job.connection_message || "CCTV sedang diproses realtime.";
   }
   if (job.status === "processing") {
@@ -683,6 +686,7 @@ async function pollMultiJobs(cameraJobs) {
         stopButton.textContent = job.status === "stopped" ? "Sudah dihentikan" : "Tidak aktif";
       }
     }
+    if (job.log_url) downloadLogLink.href = job.log_url;
     return job.status;
   }));
   if (states.some((state) => state === "processing")) {
@@ -757,8 +761,14 @@ async function startMultiAnalysis() {
       await stopJob(job.job_id, status, stopButton);
     });
     card.append(title, image, status, stopButton);
+    const logButton = document.createElement("button");
+    logButton.type = "button";
+    logButton.className = "secondary-button";
+    logButton.textContent = "Cetak log sekarang";
+    logButton.addEventListener("click", () => requestLogSnapshot(job.job_id, logButton));
+    card.append(logButton);
     multiLiveGrid.append(card);
-    return { jobId: job.job_id, status, stopButton };
+    return { jobId: job.job_id, status, stopButton, logButton };
   });
   liveStream.hidden = true;
   resultVideo.hidden = true;
@@ -768,6 +778,7 @@ async function startMultiAnalysis() {
   resultPanel.hidden = false;
   resultKicker.hidden = true;
   resultTitle.textContent = "Monitoring CCTV realtime";
+  snapshotLogButton.hidden = true;
   statusLabel.textContent = "Dashboard CCTV berjalan";
   statusDetail.textContent = "Setiap kamera diproses dan dicatat secara terpisah.";
   pollMultiJobs(cameraJobs).catch((error) => showError(error.message));
@@ -779,6 +790,7 @@ form.addEventListener("submit", async (event) => {
   resultPanel.hidden = true;
   resultKicker.hidden = false;
   resultTitle.textContent = "Video hasil analisis";
+  snapshotLogButton.hidden = true;
   resultVideo.hidden = true;
   liveStream.hidden = true;
   multiLiveGrid.hidden = true;
@@ -881,5 +893,37 @@ async function stopJob(jobId, statusElement, stopButton) {
     statusElement.textContent = error.message;
     stopButton.disabled = false;
     stopButton.textContent = "Stop analisis";
+  }
+}
+
+async function requestLogSnapshot(jobId, button) {
+  const originalText = button.textContent;
+  button.disabled = true;
+  button.textContent = "Menyiapkan log...";
+  const reportWindow = window.open("about:blank", "_blank");
+  try {
+    const response = await fetch(`/api/jobs/${jobId}/log-snapshot`, { method: "POST" });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || "Log belum dapat dibuat.");
+    let logUrl = payload.log_url || null;
+    for (let attempt = 0; !logUrl && attempt < 30; attempt += 1) {
+      await new Promise((resolve) => window.setTimeout(resolve, 500));
+      const statusResponse = await fetch(`/api/jobs/${jobId}`);
+      const job = await statusResponse.json();
+      if (job.log_url && job.log_revision !== payload.previous_revision) {
+        logUrl = job.log_url;
+        break;
+      }
+    }
+    if (!logUrl) throw new Error("Pembuatan log membutuhkan waktu terlalu lama.");
+    if (reportWindow) reportWindow.location = logUrl;
+    else window.open(logUrl, "_blank");
+  } catch (error) {
+    if (reportWindow) reportWindow.close();
+    button.textContent = error.message;
+    window.setTimeout(() => { button.textContent = originalText; }, 3000);
+  } finally {
+    button.disabled = false;
+    if (button.textContent === "Menyiapkan log...") button.textContent = originalText;
   }
 }
