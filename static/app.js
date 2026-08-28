@@ -37,6 +37,7 @@ const detectorInputs = document.querySelectorAll('input[name="detector"]');
 const bgSettings = document.querySelector("#bg-settings");
 const undoPointButton = document.querySelector("#undo-point");
 const finishPointsButton = document.querySelector("#finish-points");
+const finishManualShapeButton = document.querySelector("#finish-manual-shape");
 const resetPointsButton = document.querySelector("#reset-points");
 const submitButton = document.querySelector("#submit-button");
 const statusPanel = document.querySelector("#status-panel");
@@ -461,6 +462,7 @@ function parseCoordinateText(value, label, minimum) {
 function applyDirectCoordinates(input, label, minimum, assign) {
   try {
     assign(parseCoordinateText(input.value, label, minimum));
+    if (polygonStep === "done") polygonStep = "corridor";
     syncCalibrationInput();
     drawCalibration();
     updateCalibrationControls();
@@ -469,6 +471,21 @@ function applyDirectCoordinates(input, label, minimum, assign) {
   } catch (error) {
     showToast(error.message, "error");
     input.value = label === "Koridor jalan" ? corridorPolygon.value : routePointsInput.value;
+  }
+}
+
+function finishManualShape() {
+  try {
+    corridorPoints = parseCoordinateText(corridorDisplay.value, "Koridor jalan", 3);
+    routePoints = parseCoordinateText(routeDisplay.value, "Lintasan tengah", 2);
+    polygonStep = "done";
+    syncCalibrationInput();
+    drawCalibration();
+    updateCalibrationControls();
+    saveDrafts();
+    showToast("Bentuk manual berhasil disimpan.");
+  } catch (error) {
+    showToast(error.message, "error");
   }
 }
 
@@ -881,6 +898,7 @@ corridorDisplay.addEventListener("change", () => {
 routeDisplay.addEventListener("change", () => {
   applyDirectCoordinates(routeDisplay, "Lintasan tengah", 2, (points) => { routePoints = points; });
 });
+finishManualShapeButton.addEventListener("click", finishManualShape);
 restoreDrafts();
 setSourceSettings();
 
