@@ -44,6 +44,7 @@ const statusLabel = document.querySelector("#status-label");
 const statusDetail = document.querySelector("#status-detail");
 const progressValue = document.querySelector("#progress-value");
 const progressBar = document.querySelector("#progress-bar");
+const progressTrack = progressBar.parentElement;
 const resultPanel = document.querySelector("#result-panel");
 const resultKicker = document.querySelector("#result-kicker");
 const resultTitle = document.querySelector("#result-title");
@@ -630,6 +631,8 @@ async function pollJob(jobId) {
   progressValue.textContent = `${job.progress}%`;
   progressBar.style.width = `${job.progress}%`;
   if (job.stream_url) {
+    progressValue.hidden = true;
+    progressTrack.hidden = true;
     liveStream.src = job.stream_url;
     liveStream.hidden = false;
     resultVideo.hidden = true;
@@ -781,6 +784,8 @@ async function startMultiAnalysis() {
   resultTitle.textContent = "Monitoring CCTV realtime";
   snapshotLogButton.hidden = true;
   statusLabel.textContent = "Dashboard CCTV berjalan";
+  progressValue.hidden = true;
+  progressTrack.hidden = true;
   statusDetail.textContent = "Setiap kamera diproses dan dicatat secara terpisah.";
   pollMultiJobs(cameraJobs).catch((error) => showError(error.message));
 }
@@ -803,6 +808,8 @@ form.addEventListener("submit", async (event) => {
     : "Video sedang diproses dengan model hauler fine-tuned.";
   progressValue.textContent = "0%";
   progressBar.style.width = "0%";
+  progressValue.hidden = selectedSource() !== "file";
+  progressTrack.hidden = selectedSource() !== "file";
   submitButton.disabled = true;
   submitButton.textContent = "Memproses";
 
