@@ -1044,7 +1044,17 @@ def save_camera_configuration() -> tuple[Any, int] | Any:
         url = str(camera.get("url", "")).strip()
         if not url.lower().startswith("rtsp://"):
             return jsonify(error=f"URL Kamera {index} harus diawali rtsp://."), 400
-        cameras.append({"name": name, "url": url})
+        cameras.append({
+            "name": name,
+            "url": url,
+            "corridorPoints": camera.get("corridorPoints", []),
+            "routePoints": camera.get("routePoints", []),
+            "calibrationPoints": camera.get("calibrationPoints", []),
+            "polygonStep": camera.get("polygonStep", "corridor"),
+            "gateCount": camera.get("gateCount", 2),
+            "gateDistances": camera.get("gateDistances", [""]),
+            "routeLength": camera.get("routeLength", ""),
+        })
     try:
         CAMERA_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
         CAMERA_CONFIG_PATH.write_text(json.dumps({"cameras": cameras}, indent=2), encoding="utf-8")

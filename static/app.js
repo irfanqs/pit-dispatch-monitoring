@@ -873,12 +873,27 @@ async function loadCameraConfig() {
     if (Array.isArray(saved)) {
       saved.forEach((camera, index) => {
         if (index < multiCameraStates.length) {
-          multiCameraStates[index].name = camera.name || `Kamera ${index + 1}`;
-          multiCameraStates[index].url = camera.url || "";
+          const state = multiCameraStates[index];
+          state.name = camera.name || `Kamera ${index + 1}`;
+          state.url = camera.url || "";
+          state.corridorPoints = Array.isArray(camera.corridorPoints) ? camera.corridorPoints : [];
+          state.routePoints = Array.isArray(camera.routePoints) ? camera.routePoints : [];
+          state.calibrationPoints = Array.isArray(camera.calibrationPoints) ? camera.calibrationPoints : [];
+          state.polygonStep = typeof camera.polygonStep === "string" ? camera.polygonStep : "corridor";
+          state.gateCount = Number.isInteger(camera.gateCount) && camera.gateCount >= 2 ? camera.gateCount : 2;
+          state.gateDistances = Array.isArray(camera.gateDistances) ? camera.gateDistances : [""];
+          state.routeLength = typeof camera.routeLength === "string" ? camera.routeLength : "";
         } else {
           const state = createCameraState(multiCameraStates.length);
           state.name = camera.name || state.name;
           state.url = camera.url || "";
+          state.corridorPoints = Array.isArray(camera.corridorPoints) ? camera.corridorPoints : [];
+          state.routePoints = Array.isArray(camera.routePoints) ? camera.routePoints : [];
+          state.calibrationPoints = Array.isArray(camera.calibrationPoints) ? camera.calibrationPoints : [];
+          state.polygonStep = typeof camera.polygonStep === "string" ? camera.polygonStep : "corridor";
+          state.gateCount = Number.isInteger(camera.gateCount) && camera.gateCount >= 2 ? camera.gateCount : 2;
+          state.gateDistances = Array.isArray(camera.gateDistances) ? camera.gateDistances : [""];
+          state.routeLength = typeof camera.routeLength === "string" ? camera.routeLength : "";
           multiCameraStates.push(state);
         }
       });
@@ -894,9 +909,10 @@ async function loadCameraConfig() {
 
 async function saveCameraConfig() {
   try {
+    saveActiveMultiCalibration();
     const payload = multiCameraStates
       .filter((camera) => camera.url.trim())
-      .map(({ previewUrl, ...camera }) => ({ name: camera.name, url: camera.url }));
+      .map(({ previewUrl, ...camera }) => camera);
     if (!payload.length) throw new Error("Masukkan minimal satu URL RTSP sebelum menyimpan.");
     const response = await fetch("/api/camera-configurations", {
       method: "PUT",
