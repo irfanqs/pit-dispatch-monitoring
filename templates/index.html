@@ -117,11 +117,7 @@
                 <span>YOLO</span>
                 <small>Deep learning. Mengenal kelas objek (mobil, truk, bus). Lebih lambat.</small>
               </label>
-              <label class="mode-option">
-                <input type="radio" name="detector" value="bg">
-                <span>Background Subtraction</span>
-                <small>Klasik, sangat cepat, menangkap objek bergerak kecil (hauler). Kamera harus statis.</small>
-              </label>
+              <!-- Background Subtraction disimpan di backend, tetapi sementara tidak ditampilkan karena analisis menggunakan YOLO. -->
             </fieldset>
 
             <div id="bg-settings" class="settings" hidden aria-label="Konfigurasi background subtraction">
