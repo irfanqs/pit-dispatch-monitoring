@@ -171,13 +171,13 @@
               <input id="route_points" name="route_points" type="hidden" required>
               <div class="setting setting-wide">
                 <label for="corridor_display">Koridor jalan</label>
-                <input id="corridor_display" readonly>
-                <small>Minimal 3 titik. Klik mengikuti kedua sisi jalan, lalu tekan “Selesai bentuk”.</small>
+                <input id="corridor_display" placeholder="1252,787; 2298,803; 5039,2159">
+                <small>Format: x,y; x,y; x,y. Minimal 3 titik. Bisa diisi manual atau melalui canvas.</small>
               </div>
               <div class="setting setting-wide">
                 <label for="route_display">Lintasan tengah</label>
-                <input id="route_display" readonly>
-                <small>Minimal 2 titik. Ikuti pusat jalur sesuai arah jalan lalu tekan “Selesai bentuk”.</small>
+                <input id="route_display" placeholder="1400,1200; 2200,1400; 3000,1700">
+                <small>Format: x,y; x,y. Minimal 2 titik. Bisa diisi manual atau melalui canvas.</small>
               </div>
               <div class="setting route-length-setting">
                 <label for="route_length_meters">Panjang lintasan (meter)</label>

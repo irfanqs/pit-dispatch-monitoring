@@ -446,6 +446,32 @@ function syncCalibrationInput() {
   gateDefinitions.value = JSON.stringify({ gates, distances: gateDistances.map(Number) });
 }
 
+function parseCoordinateText(value, label, minimum) {
+  const points = value.split(";").map((pair) => pair.trim()).filter(Boolean).map((pair) => {
+    const coordinates = pair.split(",").map((coordinate) => Number(coordinate.trim()));
+    if (coordinates.length !== 2 || coordinates.some((coordinate) => !Number.isFinite(coordinate))) {
+      throw new Error(`${label} harus menggunakan format x,y; x,y.`);
+    }
+    return { x: Math.round(coordinates[0]), y: Math.round(coordinates[1]) };
+  });
+  if (points.length < minimum) throw new Error(`${label} membutuhkan minimal ${minimum} titik.`);
+  return points;
+}
+
+function applyDirectCoordinates(input, label, minimum, assign) {
+  try {
+    assign(parseCoordinateText(input.value, label, minimum));
+    syncCalibrationInput();
+    drawCalibration();
+    updateCalibrationControls();
+    saveDrafts();
+    showToast(`${label} berhasil diperbarui.`);
+  } catch (error) {
+    showToast(error.message, "error");
+    input.value = label === "Koridor jalan" ? corridorPolygon.value : routePointsInput.value;
+  }
+}
+
 function resetCalibration() {
   corridorPoints = [];
   routePoints = [];
@@ -627,6 +653,7 @@ window.addEventListener("beforeunload", () => {
 });
 
 function showError(message) {
+  showToast(message, "error");
   errorMessage.textContent = message;
   errorPanel.hidden = false;
   statusPanel.hidden = true;
@@ -848,6 +875,12 @@ form.addEventListener("submit", async (event) => {
 
 form.addEventListener("input", saveDrafts);
 form.addEventListener("change", saveDrafts);
+corridorDisplay.addEventListener("change", () => {
+  applyDirectCoordinates(corridorDisplay, "Koridor jalan", 3, (points) => { corridorPoints = points; });
+});
+routeDisplay.addEventListener("change", () => {
+  applyDirectCoordinates(routeDisplay, "Lintasan tengah", 2, (points) => { routePoints = points; });
+});
 restoreDrafts();
 setSourceSettings();
 
