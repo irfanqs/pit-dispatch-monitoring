@@ -126,6 +126,8 @@ video { width: 100%; display: block; border-radius: 9px; background: #111; }
 img { max-width: 100%; }
 .error-panel { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, var(--line)); }
 .error-panel p { color: var(--danger); }
+.toast { position: fixed; z-index: 10; right: 24px; bottom: 24px; max-width: min(420px, calc(100vw - 48px)); padding: 14px 18px; color: var(--surface); background: var(--accent-strong); border-radius: 9px; box-shadow: 0 12px 30px color-mix(in srgb, #000 18%, transparent); font-weight: 700; }
+.toast[data-type="error"] { background: var(--danger); }
 .report-hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 340px); align-items: end; gap: 40px; padding: 42px 0 30px; border-bottom: 1px solid var(--line); }
 .report-hero h1 { max-width: 720px; font-size: clamp(2.3rem, 5vw, 4.5rem); }
 .report-hero p { max-width: 620px; margin: 0; color: var(--muted); line-height: 1.6; }

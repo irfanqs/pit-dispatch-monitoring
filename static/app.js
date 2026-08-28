@@ -56,6 +56,7 @@ const downloadLogLink = document.querySelector("#download-log-link");
 const snapshotLogButton = document.querySelector("#snapshot-log-button");
 const errorPanel = document.querySelector("#error-panel");
 const errorMessage = document.querySelector("#error-message");
+const toast = document.querySelector("#toast");
 const FORM_DRAFT_KEY = "speedlens.form-draft";
 const CAMERA_DRAFT_KEY = "speedlens.multi-camera-draft";
 const MAX_MULTI_CAMERAS = 16;
@@ -68,6 +69,15 @@ let gateCount = 2;
 let gateDistances = [""];
 let rtspPreviewUrl;
 let activeMultiCamera = null;
+let toastTimer;
+
+function showToast(message, type = "success") {
+  toast.textContent = message;
+  toast.dataset.type = type;
+  toast.hidden = false;
+  window.clearTimeout(toastTimer);
+  toastTimer = window.setTimeout(() => { toast.hidden = true; }, 3200);
+}
 function createCameraState(index) {
   return {
   name: `Kamera ${index + 1}`,
@@ -220,6 +230,7 @@ function renderMultiCameraList() {
         multiCameraStates.forEach((state, stateIndex) => { if (!state.name) state.name = `Kamera ${stateIndex + 1}`; });
         renderMultiCameraList();
         saveDrafts();
+        showToast("Kamera berhasil dihapus.");
       });
       card.append(removeButton);
     }
@@ -843,6 +854,7 @@ function addNewCamera() {
   multiCameraStates.push(createCameraState(newIndex));
   renderMultiCameraList();
   addCameraButton.disabled = multiCameraStates.length >= MAX_MULTI_CAMERAS;
+  showToast("Kamera baru berhasil ditambahkan.");
 }
 
 async function loadCameraConfig() {
@@ -866,7 +878,9 @@ async function loadCameraConfig() {
     }
     renderMultiCameraList();
     addCameraButton.disabled = multiCameraStates.length >= MAX_MULTI_CAMERAS;
+    showToast(`${saved.length} konfigurasi kamera berhasil dimuat.`);
   } catch (error) {
+    showToast(error.message, "error");
     showError(error.message);
   }
 }
@@ -887,7 +901,9 @@ async function saveCameraConfig() {
     statusPanel.hidden = false;
     statusLabel.textContent = "Konfigurasi kamera tersimpan";
     statusDetail.textContent = `${data.cameras.length} kamera siap digunakan saat aplikasi dijalankan kembali.`;
+    showToast("Konfigurasi kamera berhasil disimpan.");
   } catch (error) {
+    showToast(error.message, "error");
     showError(error.message);
   }
 }
@@ -897,7 +913,9 @@ async function stopJob(jobId, statusElement, stopButton) {
     const response = await fetch(`/api/jobs/${jobId}/stop`, { method: "POST" });
     if (!response.ok) throw new Error("Gagal menghentikan kamera.");
     statusElement.textContent = "Menghentikan kamera...";
+    showToast("Permintaan stop analisis berhasil dikirim.");
   } catch (error) {
+    showToast(error.message, "error");
     statusElement.textContent = error.message;
     stopButton.disabled = false;
     stopButton.textContent = "Stop analisis";
@@ -926,9 +944,11 @@ async function requestLogSnapshot(jobId, button) {
     if (!logUrl) throw new Error("Pembuatan log membutuhkan waktu terlalu lama.");
     if (reportWindow) reportWindow.location = logUrl;
     else window.open(logUrl, "_blank");
+    showToast("Log realtime berhasil dibuat.");
   } catch (error) {
     if (reportWindow) reportWindow.close();
     button.textContent = error.message;
+    showToast(error.message, "error");
     window.setTimeout(() => { button.textContent = originalText; }, 3000);
   } finally {
     button.disabled = false;
