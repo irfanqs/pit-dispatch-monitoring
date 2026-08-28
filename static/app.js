@@ -776,6 +776,13 @@ async function startMultiAnalysis() {
       await stopJob(job.job_id, status, stopButton);
     });
     card.append(title, image, status, stopButton);
+    const openButton = document.createElement("a");
+    openButton.className = "secondary-link live-popout-link";
+    openButton.href = `/api/jobs/${job.job_id}/stream`;
+    openButton.target = "_blank";
+    openButton.rel = "noopener";
+    openButton.textContent = "Buka layar besar";
+    card.append(openButton);
     const logButton = document.createElement("button");
     logButton.type = "button";
     logButton.className = "secondary-button";
