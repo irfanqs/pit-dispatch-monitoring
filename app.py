@@ -1146,6 +1146,10 @@ def parse_sheet_number(value: str | None) -> float:
     raw = (value or "").strip().replace(" ", "").replace("-", "")
     if not raw:
         return 0.0
+    if raw.endswith("x") or raw.endswith("X"):
+        raw = raw[:-1].strip()
+    if not raw:
+        return 0.0
     if raw.endswith("%"):
         return parse_sheet_number(raw[:-1]) / 100
     if "," in raw:
@@ -1195,7 +1199,7 @@ def production_dashboard() -> str:
 
 @app.get("/api/production")
 def production_data() -> tuple[Any, int] | Any:
-    """Aggregate the public daily production sheet for the selected date range."""
+    """Aggregate the public daily production sheet for the selected date range according to grouping rules."""
     try:
         rows = load_production_rows()
         start = request.args.get("start")
@@ -1208,27 +1212,66 @@ def production_data() -> tuple[Any, int] | Any:
             rows = [row for row in rows if row["parsed_date"] <= end_date]
         if not rows:
             return jsonify(error="Tidak ada data pada rentang tanggal ini."), 404
+
         total = lambda column: round(sum(parse_sheet_number(row.get(column)) for row in rows), 2)
+        avg = lambda column: round(sum(parse_sheet_number(row.get(column)) for row in rows) / len(rows), 2)
+
+        # 1. Material Review (Hijau muda / Kode B - K)
+        materials = [{"name": column, "value": total(column)} for column in MATERIAL_COLUMNS]
+
+        # 2. Production Summary (OB, Coal, SR, Productivity)
         plan_ob = total("PLAN OB")
         actual_ob = total("ACT OB")
         plan_coal = total("PLAN COAL")
         actual_coal = total("ACT COAL")
-        pa_plan = total("PLAN PA PROD EQP")
-        pa_actual = total("ACT PA PROD EQP")
-        pa_factor = pa_actual / pa_plan if pa_plan else 1
-        pa_result = round(plan_ob * pa_factor, 2)
-        materials = [{"name": column, "value": total(column)} for column in MATERIAL_COLUMNS]
+        plan_sr = total("PLAN SR")
+        actual_sr = total("SR")
+        productivity = avg("PDTY")
+
+        # 3. Weather Review (Satu baris cuaca)
+        weather = {
+            "rain_hours": total("RAIN"),
+            "slippery_hours": total("SLIPERRY"),
+            "foggy_hours": total("FOGGY"),
+            "rain_intensity": avg("RAIN INT"),
+            "rain_freq": total("RAIN X"),
+            "slippery_freq": total("SLIPERRY X"),
+            "foggy_freq": total("FOGGY X"),
+        }
+
+        # 4. Fleet & Equipment Availability (Pink)
+        fleet = {
+            "plan_fleet": avg("PLAN FLEET RUNNING "),
+            "actual_fleet": avg("ACTUAL FLEET RUNNING "),
+            "plan_pa_prod": avg("PLAN PA PROD EQP"),
+            "actual_pa_prod": avg("ACT PA PROD EQP "),
+            "plan_pa_supp": avg("PLAN PA SUPPORT EQP"),
+            "actual_pa_supp": avg("ACT PA SUPPORT EQP "),
+        }
+
+        # 5. Utilization (UA & UO)
+        utilization = {
+            "plan_ua": avg("PLAN UA"),
+            "actual_ua": avg("ACT UA"),
+            "plan_uo": avg("PLAN UO"),
+            "actual_uo": avg("ACT UO"),
+        }
+
         return jsonify(
-            range={"start": min(row["parsed_date"] for row in rows).date().isoformat(), "end": max(row["parsed_date"] for row in rows).date().isoformat()},
-            ob={"actual": actual_ob, "plan": plan_ob, "progress": round(actual_ob / plan_ob * 100, 1) if plan_ob else 0},
-            coal={"actual": actual_coal, "plan": plan_coal, "progress": round(actual_coal / plan_coal * 100, 1) if plan_coal else 0},
+            range={
+                "start": min(row["parsed_date"] for row in rows).date().isoformat(),
+                "end": max(row["parsed_date"] for row in rows).date().isoformat(),
+            },
             materials=materials,
-            waterfall=[
-                {"name": "Plan", "value": plan_ob, "total": True},
-                {"name": "PA", "value": round(pa_result - plan_ob, 2), "total": False},
-                {"name": "Setelah PA", "value": pa_result, "total": True},
-            ],
-            waterfall_note="Dampak PA dihitung dari perbandingan total ACT PA PROD EQP terhadap PLAN PA PROD EQP.",
+            production={
+                "ob": {"plan": plan_ob, "actual": actual_ob, "progress": round(actual_ob / plan_ob * 100, 1) if plan_ob else 0},
+                "coal": {"plan": plan_coal, "actual": actual_coal, "progress": round(actual_coal / plan_coal * 100, 1) if plan_coal else 0},
+                "sr": {"plan": plan_sr, "actual": actual_sr, "progress": round(actual_sr / plan_sr * 100, 1) if plan_sr else 0},
+                "productivity": productivity,
+            },
+            weather=weather,
+            fleet=fleet,
+            utilization=utilization,
         )
     except (OSError, ValueError, requests.RequestException) as error:
         return jsonify(error=f"Data produksi tidak dapat dimuat: {error}"), 502

@@ -1,6 +1,184 @@
 <!doctype html>
-<html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><title>Produksi Tambang - Pit Dispatch Monitoring</title><link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"></head>
-<body><main class="shell dashboard-shell"><header class="topbar"><a class="brand" href="/">Pit Dispatch Monitoring</a><nav class="topnav"><a href="/">Analisis</a><a href="/dashboard">Dashboard laporan</a><a class="active" href="/production-dashboard">Produksi tambang</a></nav></header>
-<section class="report-hero"><div><span class="kicker">Mining production</span><h1>Produksi lapangan dalam satu tampilan.</h1><p>Data langsung dari spreadsheet operasional, difokuskan pada OB, coal, komposisi material, dan dampak PA.</p></div><div class="date-filter"><label>Mulai<input id="production-start" type="date"></label><label>Sampai<input id="production-end" type="date"></label><button id="apply-production-filter" type="button">Terapkan</button></div></section>
-<p id="production-error" class="production-error" hidden></p><section id="production-content" hidden><p id="production-range" class="report-source"></p><section class="production-kpi"><article class="production-card"><h2>OB Production</h2><strong id="ob-actual">0</strong><p><span id="ob-progress">0</span>% dari plan <b id="ob-plan">0</b></p><i><span id="ob-bar"></span></i></article><article class="production-card"><h2>Coal Production</h2><strong id="coal-actual">0</strong><p><span id="coal-progress">0</span>% dari plan <b id="coal-plan">0</b></p><i><span id="coal-bar"></span></i></article></section>
-<section class="dashboard-grid"><article class="chart-panel"><div class="panel-heading"><div><span class="kicker">Material</span><h2>Production by material</h2></div></div><div id="material-chart" class="material-chart"></div></article><article class="chart-panel"><div class="panel-heading"><div><span class="kicker">Waterfall</span><h2>Plan dan dampak PA</h2></div></div><div id="waterfall-chart" class="waterfall-chart"></div><p id="waterfall-note" class="chart-note"></p></article></section></section></main><script src="{{ url_for('static', filename='production_dashboard.js') }}"></script></body></html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Produksi Tambang - Pit Dispatch Monitoring</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="shell dashboard-shell">
+    <header class="topbar">
+      <a class="brand" href="/">Pit Dispatch Monitoring</a>
+      <nav class="topnav">
+        <a href="/">Analisis</a>
+        <a href="/dashboard">Dashboard laporan</a>
+        <a class="active" href="/production-dashboard">Produksi tambang</a>
+      </nav>
+    </header>
+
+    <section class="report-hero">
+      <div>
+        <span class="kicker">Mining Production Dashboard</span>
+        <h1>Laporan Operasional Tambang</h1>
+        <p>Ringkasan komprehensif produksi material, pencapaian target OB/Coal/SR, catatan cuaca, kesiapan armada (PA), serta utilisasi unit (UA & UO).</p>
+      </div>
+      <div class="date-filter">
+        <label>Mulai<input id="production-start" type="date"></label>
+        <label>Sampai<input id="production-end" type="date"></label>
+        <button id="apply-production-filter" type="button">Terapkan</button>
+      </div>
+    </section>
+
+    <p id="production-error" class="production-error" hidden></p>
+
+    <section id="production-content" hidden>
+      <p id="production-range" class="report-source"></p>
+
+      <!-- 1. BARIS MATERIAL (HIJAU MUDA) -->
+      <section class="dashboard-section material-section">
+        <div class="section-title">
+          <span class="kicker">Material Review</span>
+          <h2>Production Material Composition (RP - N P)</h2>
+        </div>
+        <div id="material-chart" class="material-grid"></div>
+      </section>
+
+      <!-- 2. BARIS PRODUCTION PLAN VS ACTUAL (OB, COAL, SR, PRODUCTIVITY) -->
+      <section class="dashboard-section">
+        <div class="section-title">
+          <span class="kicker">Production Review</span>
+          <h2>Plan vs Actual & Productivity</h2>
+        </div>
+        <div class="production-kpi-grid">
+          <article class="prod-card">
+            <h3>OB Production</h3>
+            <div class="prod-val">
+              <strong id="ob-actual">0</strong>
+              <small>Plan: <b id="ob-plan">0</b> BCM</small>
+            </div>
+            <div class="progress-bar-wrap"><span id="ob-bar"></span></div>
+            <span class="prod-pct" id="ob-progress">0%</span>
+          </article>
+
+          <article class="prod-card">
+            <h3>Coal Production</h3>
+            <div class="prod-val">
+              <strong id="coal-actual">0</strong>
+              <small>Plan: <b id="coal-plan">0</b> MT</small>
+            </div>
+            <div class="progress-bar-wrap"><span id="coal-bar"></span></div>
+            <span class="prod-pct" id="coal-progress">0%</span>
+          </article>
+
+          <article class="prod-card">
+            <h3>Stripping Ratio (SR)</h3>
+            <div class="prod-val">
+              <strong id="sr-actual">0</strong>
+              <small>Plan: <b id="sr-plan">0</b></small>
+            </div>
+            <div class="progress-bar-wrap"><span id="sr-bar"></span></div>
+            <span class="prod-pct" id="sr-progress">0%</span>
+          </article>
+
+          <article class="prod-card stat-card">
+            <h3>Average Productivity</h3>
+            <div class="prod-val">
+              <strong id="productivity-val">0</strong>
+              <small>BCM / Hour</small>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <!-- 3. BARIS WEATHER REVIEW (KUNING) -->
+      <section class="dashboard-section weather-section">
+        <div class="section-title">
+          <span class="kicker">Weather Review</span>
+          <h2>Dampak Cuaca & Frekuensi</h2>
+        </div>
+        <div class="weather-grid">
+          <div class="weather-card">
+            <span class="w-label">Rain Duration</span>
+            <strong id="w-rain-h">0 hrs</strong>
+            <small id="w-rain-x">0 x kejadian</small>
+          </div>
+          <div class="weather-card">
+            <span class="w-label">Slippery Duration</span>
+            <strong id="w-slip-h">0 hrs</strong>
+            <small id="w-slip-x">0 x kejadian</small>
+          </div>
+          <div class="weather-card">
+            <span class="w-label">Foggy Duration</span>
+            <strong id="w-fog-h">0 hrs</strong>
+            <small id="w-fog-x">0 x kejadian</small>
+          </div>
+          <div class="weather-card">
+            <span class="w-label">Avg Rain Intensity</span>
+            <strong id="w-rain-int">0 mm</strong>
+            <small>Rata-rata intensitas</small>
+          </div>
+        </div>
+      </section>
+
+      <!-- 4. BARIS FLEET & PA (PINK) -->
+      <section class="dashboard-section fleet-section">
+        <div class="section-title">
+          <span class="kicker">Fleet & Availability (PA)</span>
+          <h2>Fleet Running & Equipment PA</h2>
+        </div>
+        <div class="fleet-grid">
+          <article class="fleet-card">
+            <h3>Running Fleet</h3>
+            <div class="fleet-compare">
+              <div><span>Actual</span><strong id="act-fleet">0</strong></div>
+              <div><span>Plan</span><small id="plan-fleet">0</small></div>
+            </div>
+          </article>
+          <article class="fleet-card">
+            <h3>PA Production Equipment</h3>
+            <div class="fleet-compare">
+              <div><span>Actual</span><strong id="act-pa-prod">0%</strong></div>
+              <div><span>Plan</span><small id="plan-pa-prod">0%</small></div>
+            </div>
+          </article>
+          <article class="fleet-card">
+            <h3>PA Support Equipment</h3>
+            <div class="fleet-compare">
+              <div><span>Actual</span><strong id="act-pa-supp">0%</strong></div>
+              <div><span>Plan</span><small id="plan-pa-supp">0%</small></div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <!-- 5. BARIS UTILIZATION (UA & UO) -->
+      <section class="dashboard-section util-section">
+        <div class="section-title">
+          <span class="kicker">Utilization Review</span>
+          <h2>Use of Availability (UA) & Utilization of Option (UO)</h2>
+        </div>
+        <div class="util-grid">
+          <article class="util-card">
+            <h3>Use of Availability (UA)</h3>
+            <div class="util-compare">
+              <div class="u-stat"><span>Actual UA</span><strong id="act-ua">0%</strong></div>
+              <div class="u-stat"><span>Plan UA</span><small id="plan-ua">0%</small></div>
+            </div>
+          </article>
+          <article class="util-card">
+            <h3>Utilization of Option (UO)</h3>
+            <div class="util-compare">
+              <div class="u-stat"><span>Actual UO</span><strong id="act-uo">0%</strong></div>
+              <div class="u-stat"><span>Plan UO</span><small id="plan-uo">0%</small></div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+    </section>
+  </main>
+  <script src="{{ url_for('static', filename='production_dashboard.js') }}"></script>
+</body>
+</html>

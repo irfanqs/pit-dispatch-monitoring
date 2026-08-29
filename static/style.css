@@ -177,23 +177,66 @@ select { width: 100%; padding: 12px; color: var(--text); background: var(--surfa
 .production-error { margin-top: 20px; color: var(--danger); }
 .production-kpi { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin: 22px 0 16px; }
 .production-card { padding: 22px; border-radius: 10px; background: var(--surface); border: 1px solid var(--line); }
-.production-card h2 { margin: 0; font-size: 1.1rem; }
-.production-card strong { display: block; margin: 20px 0 4px; font-size: clamp(2rem, 4vw, 3.4rem); letter-spacing: -0.06em; }
-.production-card p, .chart-note { color: var(--muted); margin: 0; }
-.production-card i { display: block; height: 10px; margin-top: 18px; border-radius: 99px; overflow: hidden; background: var(--surface-muted); }
-.production-card i span { display: block; height: 100%; background: var(--accent); }
-.material-chart, .waterfall-chart { display: grid; gap: 11px; }
-.material-row, .waterfall-row { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; gap: 10px; font-size: 0.85rem; }
-.material-row i, .waterfall-row i { height: 14px; overflow: hidden; background: var(--surface-muted); border-radius: 3px; }
-.material-row i b, .waterfall-row i b { display: block; height: 100%; background: var(--accent); }
-.waterfall-row.loss i b { background: var(--danger); }
-.waterfall-row.total i b { background: #12717b; }
-.chart-note { margin-top: 18px; font-size: 0.82rem; line-height: 1.45; }
-.table-scroll { overflow-x: auto; }
-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.88rem; }
-th { padding: 10px 12px; color: var(--muted); font-size: 0.75rem; font-weight: 700; white-space: nowrap; }
-td { padding: 13px 12px; border-top: 1px solid var(--line); white-space: nowrap; }
-td:last-child { color: var(--accent); font-weight: 750; }
+/* Production Dashboard Custom Sections */
+.dashboard-section { margin-bottom: 36px; padding: 24px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.section-title { margin-bottom: 20px; }
+.section-title h2 { margin: 4px 0 0; font-size: 1.4rem; }
+
+/* 1. Material Section (Kuning/Hijau) */
+.material-section { background: color-mix(in srgb, #eab308 6%, var(--surface)); border-color: color-mix(in srgb, #eab308 30%, var(--line)); }
+.material-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 14px; }
+.mat-card { padding: 12px; border-radius: 8px; background: var(--surface-muted); border: 1px solid var(--line); display: grid; gap: 8px; }
+.mat-head { display: flex; align-items: center; justify-content: space-between; }
+.mat-code { font-weight: 750; font-size: 0.9rem; color: var(--accent); }
+.mat-val { font-size: 0.95rem; }
+.mat-bar-bg { height: 6px; background: var(--line); border-radius: 99px; overflow: hidden; }
+.mat-bar-fill { height: 100%; background: #eab308; border-radius: inherit; }
+
+/* 2. Production KPI Grid */
+.production-kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; }
+.prod-card { padding: 20px; border-radius: 10px; background: var(--surface-muted); border: 1px solid var(--line); display: flex; flex-direction: column; justify-content: space-between; position: relative; }
+.prod-card h3 { margin: 0 0 12px; font-size: 1rem; color: var(--muted); }
+.prod-val strong { display: block; font-size: 1.8rem; letter-spacing: -0.04em; }
+.prod-val small { display: block; margin-top: 4px; color: var(--muted); font-size: 0.85rem; }
+.progress-bar-wrap { height: 8px; background: var(--line); border-radius: 99px; margin-top: 16px; overflow: hidden; }
+.progress-bar-wrap span { display: block; height: 100%; background: var(--accent); border-radius: inherit; }
+.prod-pct { position: absolute; top: 20px; right: 20px; font-weight: 750; font-size: 0.95rem; color: var(--accent); }
+
+/* 3. Weather Section (Kuning) */
+.weather-section { background: color-mix(in srgb, #f59e0b 8%, var(--surface)); border-color: color-mix(in srgb, #f59e0b 35%, var(--line)); }
+.weather-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.weather-card { padding: 16px; border-radius: 10px; background: var(--surface-muted); border: 1px solid var(--line); display: grid; gap: 4px; }
+.w-label { font-size: 0.85rem; font-weight: 700; color: var(--muted); }
+.weather-card strong { font-size: 1.4rem; color: var(--text); }
+.weather-card small { font-size: 0.8rem; color: var(--muted); }
+
+/* 4. Fleet Section (Pink) */
+.fleet-section { background: color-mix(in srgb, #ec4899 6%, var(--surface)); border-color: color-mix(in srgb, #ec4899 30%, var(--line)); }
+.fleet-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+.fleet-card { padding: 18px; border-radius: 10px; background: var(--surface-muted); border: 1px solid var(--line); }
+.fleet-card h3 { margin: 0 0 14px; font-size: 0.95rem; color: var(--muted); }
+.fleet-compare { display: flex; align-items: center; justify-content: space-around; text-align: center; }
+.fleet-compare span { display: block; font-size: 0.78rem; color: var(--muted); font-weight: 700; }
+.fleet-compare strong { display: block; font-size: 1.5rem; color: var(--accent); }
+.fleet-compare small { display: block; font-size: 1.3rem; color: var(--text); font-weight: 700; }
+
+/* 5. Utilization Section */
+.util-section { background: color-mix(in srgb, #3b82f6 6%, var(--surface)); border-color: color-mix(in srgb, #3b82f6 30%, var(--line)); }
+.util-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; }
+.util-card { padding: 20px; border-radius: 10px; background: var(--surface-muted); border: 1px solid var(--line); }
+.util-card h3 { margin: 0 0 14px; font-size: 1rem; color: var(--muted); }
+.util-compare { display: flex; align-items: center; justify-content: space-around; text-align: center; }
+.u-stat span { display: block; font-size: 0.8rem; color: var(--muted); font-weight: 700; }
+.u-stat strong { display: block; font-size: 1.7rem; color: var(--accent); }
+.u-stat small { display: block; font-size: 1.4rem; color: var(--text); font-weight: 700; }
+
+@media (max-width: 900px) {
+  .production-kpi-grid, .weather-grid, .fleet-grid, .util-grid { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 600px) {
+  .production-kpi-grid, .weather-grid, .fleet-grid, .util-grid { grid-template-columns: 1fr; }
+}
 
 @media (max-width: 767px) {
   .shell { padding: 0 16px 40px; }
