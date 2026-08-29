@@ -49,7 +49,7 @@ except ZoneInfoNotFoundError:
     # Windows may not ship the IANA timezone database; Jakarta is UTC+7 year-round.
     LOG_TIMEZONE = timezone(timedelta(hours=7))
 TRACK_CONFIRMATION_FRAMES = 5
-PRODUCTION_SHEET_ID = "1uzeFePgF0vGwEaEx61ZzCe3qlvew69o5hs0Q3oFdEzQ"
+PRODUCTION_SHEET_ID = "1CbtRK-KHthzeCKpCVRrvibjlL5NijBT5V3zht5R5Yyw"
 PRODUCTION_SHEET_NAME = "DATA"
 MATERIAL_COLUMNS = ("RP", "ON", "FD", "BL", "TS", "MP", "MC", "BD", "CL", "N P")
 MAX_MULTI_CAMERAS = 16
@@ -1373,4 +1373,4 @@ def file_too_large(_: Any) -> tuple[Any, int]:
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", debug=True, port=int(os.environ.get("PORT", "5000")))
+    app.run(host="0.0.0.0", debug=True, port=int(os.environ.get("PORT", "5010")))
