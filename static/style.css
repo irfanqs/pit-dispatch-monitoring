@@ -229,13 +229,26 @@ select { width: 100%; padding: 12px; color: var(--text); background: var(--surfa
 .u-stat span { display: block; font-size: 0.8rem; color: var(--muted); font-weight: 700; }
 .u-stat strong { display: block; font-size: 1.7rem; color: var(--accent); }
 .u-stat small { display: block; font-size: 1.4rem; color: var(--text); font-weight: 700; }
+.comparison-chart { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 24px; }
+.comparison-group { padding: 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-muted); }
+.comparison-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 14px; }
+.comparison-heading small { text-align: right; font-size: 0.72rem; }
+.comparison-bar { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; gap: 8px; margin-top: 9px; font-size: 0.78rem; }
+.comparison-bar i, .horizontal-row i { height: 9px; overflow: hidden; border-radius: 99px; background: var(--line); }
+.comparison-bar i b, .horizontal-row i b { display: block; height: 100%; border-radius: inherit; }
+.plan-bar { background: #94a3b8; }
+.actual-bar { background: var(--accent); }
+.horizontal-chart { display: grid; gap: 12px; margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--line); }
+.horizontal-row { display: grid; grid-template-columns: 90px minmax(0, 1fr) auto; align-items: center; gap: 12px; font-size: 0.82rem; }
+.horizontal-row i b { background: #f59e0b; }
+.horizontal-row strong { min-width: 72px; text-align: right; }
 
 @media (max-width: 900px) {
-  .production-kpi-grid, .weather-grid, .fleet-grid, .util-grid { grid-template-columns: 1fr 1fr; }
+  .production-kpi-grid, .weather-grid, .fleet-grid, .util-grid, .comparison-chart { grid-template-columns: 1fr 1fr; }
 }
 
 @media (max-width: 600px) {
-  .production-kpi-grid, .weather-grid, .fleet-grid, .util-grid { grid-template-columns: 1fr; }
+  .production-kpi-grid, .weather-grid, .fleet-grid, .util-grid, .comparison-chart { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 767px) {
