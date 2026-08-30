@@ -183,14 +183,14 @@ select { width: 100%; padding: 12px; color: var(--text); background: var(--surfa
 .section-title h2 { margin: 4px 0 0; font-size: 1.4rem; }
 
 /* 1. Material Section (Kuning/Hijau) */
-.material-section { background: color-mix(in srgb, #eab308 6%, var(--surface)); border-color: color-mix(in srgb, #eab308 30%, var(--line)); }
+.material-section { background: color-mix(in srgb, #0f766e 6%, var(--surface)); border-color: color-mix(in srgb, #0f766e 30%, var(--line)); }
 .material-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 14px; }
 .mat-card { padding: 12px; border-radius: 8px; background: var(--surface-muted); border: 1px solid var(--line); display: grid; gap: 8px; }
 .mat-head { display: flex; align-items: center; justify-content: space-between; }
 .mat-code { font-weight: 750; font-size: 0.9rem; color: var(--accent); }
 .mat-val { font-size: 0.95rem; }
 .mat-bar-bg { height: 6px; background: var(--line); border-radius: 99px; overflow: hidden; }
-.mat-bar-fill { height: 100%; background: #eab308; border-radius: inherit; }
+.mat-bar-fill { height: 100%; background: #0f766e; border-radius: inherit; }
 
 /* 2. Production KPI Grid */
 .production-kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; }
@@ -203,7 +203,7 @@ select { width: 100%; padding: 12px; color: var(--text); background: var(--surfa
 .prod-pct { position: absolute; top: 20px; right: 20px; font-weight: 750; font-size: 0.95rem; color: var(--accent); }
 
 /* 3. Weather Section (Kuning) */
-.weather-section { background: color-mix(in srgb, #f59e0b 8%, var(--surface)); border-color: color-mix(in srgb, #f59e0b 35%, var(--line)); }
+.weather-section { background: color-mix(in srgb, #0ea5e9 8%, var(--surface)); border-color: color-mix(in srgb, #0ea5e9 35%, var(--line)); }
 .weather-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
 .weather-card { padding: 16px; border-radius: 10px; background: var(--surface-muted); border: 1px solid var(--line); display: grid; gap: 4px; }
 .w-label { font-size: 0.85rem; font-weight: 700; color: var(--muted); }
@@ -221,7 +221,7 @@ select { width: 100%; padding: 12px; color: var(--text); background: var(--surfa
 .fleet-compare small { display: block; font-size: 1.3rem; color: var(--text); font-weight: 700; }
 
 /* 5. Utilization Section */
-.util-section { background: color-mix(in srgb, #3b82f6 6%, var(--surface)); border-color: color-mix(in srgb, #3b82f6 30%, var(--line)); }
+.util-section { background: color-mix(in srgb, #7c3aed 6%, var(--surface)); border-color: color-mix(in srgb, #7c3aed 30%, var(--line)); }
 .util-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; }
 .util-card { padding: 20px; border-radius: 10px; background: var(--surface-muted); border: 1px solid var(--line); }
 .util-card h3 { margin: 0 0 14px; font-size: 1rem; color: var(--muted); }
@@ -240,7 +240,7 @@ select { width: 100%; padding: 12px; color: var(--text); background: var(--surfa
 .actual-bar { background: var(--accent); }
 .horizontal-chart { display: grid; gap: 12px; margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--line); }
 .horizontal-row { display: grid; grid-template-columns: 90px minmax(0, 1fr) auto; align-items: center; gap: 12px; font-size: 0.82rem; }
-.horizontal-row i b { background: #f59e0b; }
+.horizontal-row i b { background: #0ea5e9; }
 .horizontal-row strong { min-width: 72px; text-align: right; }
 
 @media (max-width: 900px) {
