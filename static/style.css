@@ -211,7 +211,7 @@ select { width: 100%; padding: 12px; color: var(--text); background: var(--surfa
 .weather-card small { font-size: 0.8rem; color: var(--muted); }
 
 /* 4. Fleet Section (Pink) */
-.fleet-section { background: color-mix(in srgb, #ec4899 6%, var(--surface)); border-color: color-mix(in srgb, #ec4899 30%, var(--line)); }
+.fleet-section { background: color-mix(in srgb, #64748b 6%, var(--surface)); border-color: color-mix(in srgb, #64748b 30%, var(--line)); }
 .fleet-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
 .fleet-card { padding: 18px; border-radius: 10px; background: var(--surface-muted); border: 1px solid var(--line); }
 .fleet-card h3 { margin: 0 0 14px; font-size: 0.95rem; color: var(--muted); }
