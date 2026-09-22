@@ -1241,12 +1241,12 @@ def production_data() -> tuple[Any, int] | Any:
 
         # 4. Fleet & Equipment Availability (Pink)
         fleet = {
-            "plan_fleet": avg("PLAN FLEET RUNNING "),
-            "actual_fleet": avg("ACTUAL FLEET RUNNING "),
+            "plan_fleet": avg("PLAN FLEET RUNNING"),
+            "actual_fleet": avg("ACTUAL FLEET RUNNING"),
             "plan_pa_prod": avg("PLAN PA PROD EQP"),
-            "actual_pa_prod": avg("ACT PA PROD EQP "),
+            "actual_pa_prod": avg("ACT PA PROD EQP"),
             "plan_pa_supp": avg("PLAN PA SUPPORT EQP"),
-            "actual_pa_supp": avg("ACT PA SUPPORT EQP "),
+            "actual_pa_supp": avg("ACT PA SUPPORT EQP"),
         }
 
         # 5. Utilization (UA & UO)
