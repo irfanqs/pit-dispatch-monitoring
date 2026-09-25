@@ -38,6 +38,51 @@
         <a class="download-link" href="/">Buka analisis</a>
       </section>
 
+      <section class="source-sheet-panel" aria-labelledby="source-sheets-title">
+        <div class="panel-heading">
+          <div><span class="kicker">Data spreadsheet</span><h2 id="source-sheets-title">Production Exec</h2></div>
+          <span id="source-sheet-count" class="panel-stat" aria-live="polite">Memuat data...</span>
+        </div>
+        <div class="source-sheet-tabs" role="tablist" aria-label="Pilih data spreadsheet">
+          <button type="button" class="source-sheet-tab active" role="tab" aria-selected="true" data-sheet="DATA_BCM">DATA_BCM</button>
+          <button type="button" class="source-sheet-tab" role="tab" aria-selected="false" data-sheet="DATA_QTY">DATA_QTY</button>
+        </div>
+        <form id="source-sheet-date-filter" class="source-sheet-date-filter">
+          <label>Dari tanggal<input id="source-sheet-start" type="date"></label>
+          <label>Sampai tanggal<input id="source-sheet-end" type="date"></label>
+          <button type="submit">Terapkan filter</button>
+          <button id="source-sheet-reset" class="secondary-button" type="button">Reset tanggal</button>
+        </form>
+        <p id="source-sheet-error" class="source-sheet-error" role="status" hidden></p>
+        <section class="source-sheet-kpis" aria-label="Ringkasan Production Exec">
+          <article class="source-sheet-kpi"><span>Total nilai Sum</span><strong id="source-sheet-total">-</strong><small>Sesuai isi kolom Sum</small></article>
+          <article class="source-sheet-kpi"><span>Baris data</span><strong id="source-sheet-rows">-</strong><small>Dalam rentang tanggal</small></article>
+          <article class="source-sheet-kpi"><span>Excavator</span><strong id="source-sheet-excavators">-</strong><small>Excavator unik</small></article>
+        </section>
+        <section class="source-sheet-insights">
+          <article class="source-sheet-insight">
+            <div class="panel-heading"><div><span class="kicker">Tren</span><h3>Nilai Sum per hari</h3></div><span class="panel-stat">14 tanggal terakhir</span></div>
+            <div id="source-sheet-trend" class="source-sheet-trend"></div>
+          </article>
+          <article class="source-sheet-insight">
+            <div class="panel-heading"><div><span class="kicker">Komposisi</span><h3>Nilai per kelompok</h3></div></div>
+            <div id="source-sheet-categories" class="source-sheet-categories"></div>
+          </article>
+        </section>
+        <div class="source-sheet-detail-heading">
+          <div><span class="kicker">Detail</span><h3>Data mentah</h3></div>
+          <span>Kolom lengkap per baris</span>
+        </div>
+        <div class="source-sheet-table-wrap">
+          <table id="source-sheet-table" class="source-sheet-table"></table>
+        </div>
+        <div class="source-sheet-pagination">
+          <button id="source-sheet-previous" class="secondary-button" type="button" disabled>Sebelumnya</button>
+          <span id="source-sheet-page">Halaman 1</span>
+          <button id="source-sheet-next" class="secondary-button" type="button" disabled>Berikutnya</button>
+        </div>
+      </section>
+
       <section id="dashboard-content" hidden>
         <div class="report-context">
           <div>
@@ -69,10 +114,6 @@
           </article>
         </section>
 
-        <section class="vehicle-panel" aria-labelledby="vehicle-title">
-          <div class="panel-heading"><div><span class="kicker">Kendaraan</span><h2 id="vehicle-title">Ringkasan tracker</h2></div><span>Diurutkan menurut kecepatan tertinggi</span></div>
-          <div class="table-scroll"><table><thead><tr><th>ID</th><th>Frame pertama</th><th>Frame terakhir</th><th>Sampel</th><th>Confidence rata-rata</th><th>Kecepatan maks.</th></tr></thead><tbody id="vehicle-table"></tbody></table></div>
-        </section>
       </section>
     </main>
     <script src="{{ url_for('static', filename='dashboard.js') }}"></script>

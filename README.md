@@ -58,6 +58,18 @@ python app.py
 
 Buka `http://127.0.0.1:5000`.
 
+### Chat Produksi AI
+
+Pada `/production-dashboard`, tombol **Tanya AI** membuka chat yang menjawab berdasarkan data dan rentang tanggal dashboard aktif. Provider default adalah OpenRouter dengan model gratis `z-ai/glm-5.2:free`. Atur API key di file `.env` sebelum menjalankan aplikasi:
+
+```bash
+cp .env.example .env
+# Isi OPENROUTER_API_KEY dan GROQ_API_KEY di file .env
+python app.py
+```
+
+Isi `OPENROUTER_API_KEY` dan `GROQ_API_KEY`. OpenRouter menjadi provider utama; saat terkena limit, timeout, atau gangguan server, aplikasi otomatis mencoba Groq dengan model `qwen/qwen3.8-27b`. File `.env` dimuat otomatis saat aplikasi mulai. Setelah mengubah nilainya, jalankan ulang aplikasi. Model dapat diganti lewat `OPENROUTER_MODEL` dan `GROQ_MODEL`. Jangan masukkan API key ke source code atau repositori. Sumber data saat ini menyediakan `PDTY ALL` untuk produktivitas excavator, tetapi belum menyediakan nilai khusus produktivitas hauler.
+
 ### Video Rekaman
 
 1. Pilih **Upload video** dan pilih file.

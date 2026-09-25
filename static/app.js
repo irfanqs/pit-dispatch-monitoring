@@ -60,6 +60,7 @@ const errorMessage = document.querySelector("#error-message");
 const toast = document.querySelector("#toast");
 const FORM_DRAFT_KEY = "speedlens.form-draft";
 const CAMERA_DRAFT_KEY = "speedlens.multi-camera-draft";
+const ANALYSIS_JOB_KEY = "speedlens.active-analysis-job";
 const MAX_MULTI_CAMERAS = 16;
 let calibrationPoints = [];
 let corridorPoints = [];
@@ -100,6 +101,22 @@ function readDraft(key) {
     return JSON.parse(localStorage.getItem(key) || "null");
   } catch {
     return null;
+  }
+}
+
+function saveActiveAnalysisJob(jobId) {
+  try {
+    localStorage.setItem(ANALYSIS_JOB_KEY, jobId);
+  } catch {
+    // Job polling continues even when browser storage is unavailable.
+  }
+}
+
+function clearActiveAnalysisJob() {
+  try {
+    localStorage.removeItem(ANALYSIS_JOB_KEY);
+  } catch {
+    // A stale job reference must not block the analysis interface.
   }
 }
 
@@ -681,7 +698,10 @@ function showError(message) {
 async function pollJob(jobId) {
   const response = await fetch(`/api/jobs/${jobId}`);
   const job = await response.json();
-  if (!response.ok) throw new Error(job.error || "Status analisis tidak tersedia.");
+  if (!response.ok) {
+    clearActiveAnalysisJob();
+    throw new Error(job.error || "Status analisis tidak tersedia.");
+  }
 
   progressValue.textContent = `${job.progress}%`;
   progressBar.style.width = `${job.progress}%`;
@@ -883,6 +903,7 @@ form.addEventListener("submit", async (event) => {
     const response = await fetch("/api/jobs", { method: "POST", body: new FormData(form) });
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.error || "Video tidak dapat dikirim.");
+    saveActiveAnalysisJob(payload.job_id);
     statusLabel.textContent = "Menganalisis kendaraan";
     pollJob(payload.job_id).catch((error) => showError(error.message));
   } catch (error) {
@@ -901,6 +922,27 @@ routeDisplay.addEventListener("change", () => {
 finishManualShapeButton.addEventListener("click", finishManualShape);
 restoreDrafts();
 setSourceSettings();
+restoreLastAnalysisJob();
+
+async function restoreLastAnalysisJob() {
+  let jobId;
+  try {
+    jobId = localStorage.getItem(ANALYSIS_JOB_KEY);
+  } catch {
+    return;
+  }
+  if (!jobId) return;
+  statusPanel.hidden = false;
+  statusLabel.textContent = "Memulihkan status analisis";
+  statusDetail.textContent = "Mengambil progres pekerjaan terakhir…";
+  submitButton.disabled = true;
+  submitButton.textContent = "Memproses";
+  try {
+    await pollJob(jobId);
+  } catch (error) {
+    showError(error.message);
+  }
+}
 
 addCameraButton.addEventListener("click", addNewCamera);
 loadCameraConfigButton.addEventListener("click", loadCameraConfig);

@@ -4,5 +4,6 @@ requests
 ultralytics
 jsonargparse[signatures]
 Flask
+python-dotenv
 openpyxl
 tzdata

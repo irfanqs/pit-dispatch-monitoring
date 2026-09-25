@@ -47,6 +47,8 @@ function renderProduction(prod) {
 
   // Productivity
   document.querySelector("#productivity-val").textContent = format(prod.productivity);
+  document.querySelector("#productivity-excavator").textContent = prod.productivity_excavator == null ? "Data tidak tersedia" : format(prod.productivity_excavator);
+  document.querySelector("#productivity-hauler").textContent = prod.productivity_hauler == null ? "Data tidak tersedia" : format(prod.productivity_hauler);
   renderComparisonChart("production-comparison", [
     { label: "OB", plan: prod.ob.plan, actual: prod.ob.actual },
     { label: "Coal", plan: prod.coal.plan, actual: prod.coal.actual },
@@ -156,3 +158,84 @@ function showLoadError(reason) {
 document.querySelector("#apply-production-filter").addEventListener("click", () => load().catch(showLoadError));
 load().catch(showLoadError);
 window.setInterval(() => load().catch(showLoadError), refreshIntervalMs);
+
+const chat = document.querySelector("#production-chat");
+const chatMessages = document.querySelector("#production-chat-messages");
+const chatForm = document.querySelector("#production-chat-form");
+const chatInput = document.querySelector("#production-chat-input");
+const CHAT_HISTORY_KEY = "speedlens.production-chat-history";
+const chatHistory = (() => {
+  try {
+    const saved = JSON.parse(localStorage.getItem(CHAT_HISTORY_KEY) || "[]");
+    return Array.isArray(saved)
+      ? saved.filter((message) =>
+        message && ["user", "assistant"].includes(message.role)
+        && typeof message.content === "string").slice(-10)
+      : [];
+  } catch {
+    return [];
+  }
+})();
+
+function appendChatMessage(role, text) {
+  const message = document.createElement("p");
+  message.className = `chat-message ${role}`;
+  message.textContent = text;
+  chatMessages.append(message);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+  return message;
+}
+
+function renderChatHistory() {
+  chatMessages.replaceChildren();
+  if (!chatHistory.length) {
+    appendChatMessage("assistant", "Tanyakan ringkasan produksi, target, material, cuaca, fleet, PA, UA, atau UO.");
+    return;
+  }
+  chatHistory.forEach(({ role, content }) => appendChatMessage(role, content));
+}
+
+function persistChatHistory() {
+  const recentMessages = chatHistory.slice(-10);
+  chatHistory.splice(0, chatHistory.length - recentMessages.length);
+  try {
+    localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(recentMessages));
+  } catch {
+    // Chat continues when browser storage is unavailable or full.
+  }
+}
+
+renderChatHistory();
+
+document.querySelector("#production-chat-toggle").addEventListener("click", () => {
+  chat.hidden = false;
+  chatInput.focus();
+});
+document.querySelector("#production-chat-close").addEventListener("click", () => { chat.hidden = true; });
+
+chatForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const question = chatInput.value.trim();
+  if (!question) return;
+  appendChatMessage("user", question);
+  chatInput.value = "";
+  chatInput.disabled = true;
+  const pending = appendChatMessage("assistant", "Sedang menganalisis data dashboard…");
+  try {
+    const response = await fetch("/api/production/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question, history: chatHistory.slice(-10), start: start.value, end: end.value }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Chat tidak dapat diproses.");
+    pending.textContent = data.answer;
+    chatHistory.push({ role: "user", content: question }, { role: "assistant", content: data.answer });
+    persistChatHistory();
+  } catch (chatError) {
+    pending.textContent = chatError.message;
+  } finally {
+    chatInput.disabled = false;
+    chatInput.focus();
+  }
+});

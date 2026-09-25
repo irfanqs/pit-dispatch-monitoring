@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
   <title>Produksi Tambang - Pit Dispatch Monitoring</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='20260830-3') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='20260925-4') }}">
 </head>
 <body>
   <main class="shell dashboard-shell">
@@ -79,6 +79,16 @@
               <strong id="productivity-val">0</strong>
               <small>BCM / Hour</small>
             </div>
+          </article>
+        </div>
+        <div class="productivity-subgrid">
+          <article class="prod-card stat-card">
+            <h3>Productivity Excavator</h3>
+            <div class="prod-val"><strong id="productivity-excavator">—</strong><small>BCM / Hour</small></div>
+          </article>
+          <article class="prod-card stat-card">
+            <h3>Productivity Hauler</h3>
+            <div class="prod-val"><strong id="productivity-hauler">—</strong><small>BCM / Hour</small></div>
           </article>
         </div>
         <div id="production-comparison" class="comparison-chart" aria-label="Grafik perbandingan plan dan actual produksi"></div>
@@ -183,6 +193,12 @@
 
     </section>
   </main>
-  <script src="{{ url_for('static', filename='production_dashboard.js') }}"></script>
+  <button id="production-chat-toggle" class="production-chat-toggle" type="button" aria-label="Buka chat produksi"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 4h16v12H9l-5 4V4Zm4 5h8M8 12h5" /></svg><span>Tanya AI</span></button>
+  <section id="production-chat" class="production-chat" aria-label="Chat produksi" hidden>
+    <header class="production-chat-header"><div><strong>Asisten Produksi</strong><small>Jawaban berdasarkan dashboard aktif</small></div><button id="production-chat-close" type="button" aria-label="Tutup chat">×</button></header>
+    <div id="production-chat-messages" class="production-chat-messages" aria-live="polite"><p class="chat-message assistant">Tanyakan ringkasan produksi, target, material, cuaca, fleet, PA, UA, atau UO.</p></div>
+    <form id="production-chat-form" class="production-chat-form"><input id="production-chat-input" type="text" maxlength="1000" placeholder="Tanyakan data produksi…" autocomplete="off" required><button type="submit">Kirim</button></form>
+  </section>
+  <script src="{{ url_for('static', filename='production_dashboard.js', v='20260925-3') }}"></script>
 </body>
 </html>
