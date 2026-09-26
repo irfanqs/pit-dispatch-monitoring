@@ -24,7 +24,8 @@ from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
 
 BASE_DIR = Path(__file__).resolve().parent
-load_dotenv(BASE_DIR / ".env")
+DOTENV_PATH = BASE_DIR / ".env"
+DOTENV_LOADED = load_dotenv(DOTENV_PATH, override=True)
 UPLOAD_DIR = BASE_DIR / "data" / "uploads"
 RESULT_DIR = BASE_DIR / "data" / "results"
 LOG_DIR = BASE_DIR / "data" / "logs"
@@ -62,6 +63,13 @@ MAX_MULTI_CAMERAS = 16
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("pit_dispatch_monitoring")
+logger.info(
+    "AI environment loaded=%s provider=%s Groq key set=%s OpenRouter key set=%s",
+    DOTENV_LOADED,
+    os.environ.get("AI_PROVIDER", "groq"),
+    bool(os.environ.get("GROQ_API_KEY", "").strip()),
+    bool(os.environ.get("OPENROUTER_API_KEY", "").strip()),
+)
 app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024 * 1024
 jobs: dict[str, dict[str, Any]] = {}
 jobs_lock = threading.Lock()

@@ -58,7 +58,7 @@ python app.py
 
 Buka `http://127.0.0.1:5000`.
 
-Di Windows, jalankan `run_dashboard.bat`. Launcher menarik perubahan dengan `git pull --ff-only`, lalu memeriksa kedua API key. Jika key kosong atau belum ada di `.env`, launcher meminta key yang hilang tanpa menampilkan karakter yang diketik, lalu menyimpan key ke file `.env` lokal.
+Di Windows, jalankan `run_dashboard.bat`. Launcher menarik perubahan dengan `git pull --ff-only`, memeriksa API key, dan memastikan `python-dotenv` tersedia. Jika key kosong atau belum ada di `.env`, launcher meminta key yang hilang tanpa menampilkan karakter yang diketik, lalu menyimpan key ke file `.env` lokal.
 
 ### Chat Produksi AI
 

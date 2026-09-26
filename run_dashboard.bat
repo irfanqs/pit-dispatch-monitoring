@@ -12,6 +12,13 @@ echo Checking AI API key configuration...
 powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%PROJECT_DIR%\setup_env.ps1"
 if errorlevel 1 goto :env_failed
 
+python -c "import dotenv" >nul 2>&1
+if errorlevel 1 (
+  echo Installing python-dotenv for the selected Python interpreter...
+  python -m pip install python-dotenv
+  if errorlevel 1 goto :dependency_failed
+)
+
 start "Pit Dispatch Monitoring" cmd /k "cd /d ""%PROJECT_DIR%"" && python app.py"
 timeout /t 2 /nobreak >nul
 start "Cloudflare Tunnel" cmd /k "cd /d ""%PROJECT_DIR%"" && cloudflared tunnel --url http://localhost:5010"
@@ -33,6 +40,12 @@ exit /b 1
 
 :env_failed
 echo ERROR: .env setup did not complete. Run this launcher again to retry.
+popd
+pause
+exit /b 1
+
+:dependency_failed
+echo ERROR: python-dotenv installation failed. Check Python and pip, then retry.
 popd
 pause
 exit /b 1
