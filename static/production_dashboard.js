@@ -161,6 +161,8 @@ const chat = document.querySelector("#production-chat");
 const chatMessages = document.querySelector("#production-chat-messages");
 const chatForm = document.querySelector("#production-chat-form");
 const chatInput = document.querySelector("#production-chat-input");
+const chatStart = document.querySelector("#production-chat-start");
+const chatEnd = document.querySelector("#production-chat-end");
 const CHAT_HISTORY_KEY = "speedlens.production-chat-history";
 const chatHistory = (() => {
   try {
@@ -223,7 +225,7 @@ chatForm.addEventListener("submit", async (event) => {
     const response = await fetch("/api/production/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question, history: chatHistory.slice(-10), start: start.value, end: end.value }),
+      body: JSON.stringify({ question, history: chatHistory.slice(-10), start: chatStart.value, end: chatEnd.value }),
     });
     const contentType = response.headers.get("content-type") || "";
     if (!contentType.includes("application/json")) {
