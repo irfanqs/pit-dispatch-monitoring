@@ -46,9 +46,7 @@ function renderProduction(prod) {
   document.querySelector("#sr-bar").style.width = `${Math.min(prod.sr.progress, 100)}%`;
 
   // Productivity
-  document.querySelector("#productivity-val").textContent = format(prod.productivity);
-  document.querySelector("#productivity-excavator").textContent = prod.productivity_excavator == null ? "Data tidak tersedia" : format(prod.productivity_excavator);
-  document.querySelector("#productivity-hauler").textContent = prod.productivity_hauler == null ? "Data tidak tersedia" : format(prod.productivity_hauler);
+  document.querySelector("#productivity-val").textContent = prod.productivity == null ? "Data tidak tersedia" : format(prod.productivity);
   renderComparisonChart("production-comparison", [
     { label: "OB", plan: prod.ob.plan, actual: prod.ob.actual },
     { label: "Coal", plan: prod.coal.plan, actual: prod.coal.actual },

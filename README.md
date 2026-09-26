@@ -58,6 +58,8 @@ python app.py
 
 Buka `http://127.0.0.1:5000`.
 
+Di Windows, jalankan `run_dashboard.bat`. Launcher akan menarik perubahan dengan `git pull --ff-only`. Jika `.env` belum ada, launcher meminta API key OpenRouter dan Groq tanpa menampilkan karakter yang diketik, lalu membuat file `.env` lokal.
+
 ### Chat Produksi AI
 
 Pada `/production-dashboard`, tombol **Tanya AI** membuka chat yang menjawab berdasarkan data dan rentang tanggal dashboard aktif. Provider default adalah OpenRouter dengan model gratis `z-ai/glm-5.2:free`. Atur API key di file `.env` sebelum menjalankan aplikasi:
@@ -68,7 +70,7 @@ cp .env.example .env
 python app.py
 ```
 
-Isi `OPENROUTER_API_KEY` dan `GROQ_API_KEY`. OpenRouter menjadi provider utama; saat terkena limit, timeout, atau gangguan server, aplikasi otomatis mencoba Groq dengan model `qwen/qwen3.8-27b`. File `.env` dimuat otomatis saat aplikasi mulai. Setelah mengubah nilainya, jalankan ulang aplikasi. Model dapat diganti lewat `OPENROUTER_MODEL` dan `GROQ_MODEL`. Jangan masukkan API key ke source code atau repositori. Sumber data saat ini menyediakan `PDTY ALL` untuk produktivitas excavator, tetapi belum menyediakan nilai khusus produktivitas hauler.
+Isi `OPENROUTER_API_KEY` dan `GROQ_API_KEY`. OpenRouter menjadi provider utama; saat terkena limit, timeout, atau gangguan server, aplikasi otomatis mencoba Groq dengan model `qwen/qwen3.8-27b`. File `.env` dimuat otomatis saat aplikasi mulai. Setelah mengubah nilainya, jalankan ulang aplikasi. Model dapat diganti lewat `OPENROUTER_MODEL` dan `GROQ_MODEL`. Jangan masukkan API key ke source code atau repositori. Sumber menyediakan `PDTY ALL` sebagai produktivitas agregat, tanpa pemisahan excavator dan hauler.
 
 ### Video Rekaman
 

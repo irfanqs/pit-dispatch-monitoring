@@ -738,9 +738,24 @@ def run_estimation(
                         speed = completed_speeds.get(tracker_key)
                         labels.append(f"#{tracker_id}" if speed is None else f"#{tracker_id} {speed} km/h")
 
-                annotated_frame = trace_annotator.annotate(frame.copy(), detections)
-                annotated_frame = box_annotator.annotate(annotated_frame, detections)
-                annotated_frame = label_annotator.annotate(annotated_frame, detections, labels)
+                color_lookup = (
+                    detections.class_id.astype(int, copy=True)
+                    if detections.class_id is not None
+                    else np.zeros(len(detections), dtype=int)
+                )
+                for detection_index, tracker_id in enumerate(detections.tracker_id):
+                    if completed_speeds.get(int(tracker_id), 25) < 25:
+                        color_lookup[detection_index] = 1
+
+                annotated_frame = trace_annotator.annotate(
+                    frame.copy(), detections, custom_color_lookup=color_lookup
+                )
+                annotated_frame = box_annotator.annotate(
+                    annotated_frame, detections, custom_color_lookup=color_lookup
+                )
+                annotated_frame = label_annotator.annotate(
+                    annotated_frame, detections, labels, custom_color_lookup=color_lookup
+                )
                 if mode == "gate":
                     for index, gate in enumerate(gates):
                         gate_start = tuple(map(int, gate[0]))
@@ -1339,6 +1354,14 @@ def production_data() -> tuple[Any, int] | Any:
         total = lambda column: round(sum(parse_sheet_number(row.get(column)) for row in rows), 2)
         avg = lambda column: round(sum(parse_sheet_number(row.get(column)) for row in rows) / len(rows), 2)
 
+        def average_reported(column: str) -> float | None:
+            values = [
+                parse_sheet_number(value)
+                for row in rows
+                if (value := row.get(column, "")).strip() not in {"", "-", "—"}
+            ]
+            return round(sum(values) / len(values), 2) if values else None
+
         # 1. Material Review (Hijau muda / Kode B - K)
         materials = [{"name": column, "value": total(column)} for column in MATERIAL_COLUMNS]
 
@@ -1347,9 +1370,9 @@ def production_data() -> tuple[Any, int] | Any:
         actual_ob = total("ACT OB")
         plan_coal = total("PLAN COAL")
         actual_coal = total("ACT COAL")
-        plan_sr = total("PLAN SR")
-        actual_sr = total("SR")
-        productivity = avg("PDTY ALL")
+        plan_sr = average_reported("PLAN SR") or 0
+        actual_sr = average_reported("SR") or 0
+        productivity = average_reported("PDTY ALL")
 
         # 3. Weather Review (Satu baris cuaca)
         weather = {
@@ -1391,8 +1414,6 @@ def production_data() -> tuple[Any, int] | Any:
                 "coal": {"plan": plan_coal, "actual": actual_coal, "progress": round(actual_coal / plan_coal * 100, 1) if plan_coal else 0},
                 "sr": {"plan": plan_sr, "actual": actual_sr, "progress": round(actual_sr / plan_sr * 100, 1) if plan_sr else 0},
                 "productivity": productivity,
-                "productivity_excavator": productivity,
-                "productivity_hauler": None,
             },
             weather=weather,
             fleet=fleet,
