@@ -8,11 +8,9 @@ echo Updating project from GitHub...
 git pull --ff-only
 if errorlevel 1 goto :pull_failed
 
-if not exist ".env" (
-  echo AI keys are not configured. Enter keys when prompted.
-  powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%PROJECT_DIR%\setup_env.ps1"
-  if errorlevel 1 goto :env_failed
-)
+echo Checking AI API key configuration...
+powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%PROJECT_DIR%\setup_env.ps1"
+if errorlevel 1 goto :env_failed
 
 start "Pit Dispatch Monitoring" cmd /k "cd /d ""%PROJECT_DIR%"" && python app.py"
 timeout /t 2 /nobreak >nul
