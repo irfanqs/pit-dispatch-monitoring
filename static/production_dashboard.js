@@ -225,6 +225,13 @@ chatForm.addEventListener("submit", async (event) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ question, history: chatHistory.slice(-10), start: start.value, end: end.value }),
     });
+    const contentType = response.headers.get("content-type") || "";
+    if (!contentType.includes("application/json")) {
+      const message = response.status === 404
+        ? "Endpoint chat tidak ditemukan di server ini. Mulai ulang versi aplikasi terbaru."
+        : `Server mengirim HTML, bukan JSON (HTTP ${response.status}). Periksa jendela Flask untuk error.`;
+      throw new Error(message);
+    }
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Chat tidak dapat diproses.");
     pending.textContent = data.answer;

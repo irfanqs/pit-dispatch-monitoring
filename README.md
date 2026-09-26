@@ -70,7 +70,7 @@ cp .env.example .env
 python app.py
 ```
 
-Isi `OPENROUTER_API_KEY` dan `GROQ_API_KEY`. OpenRouter menjadi provider utama; saat terkena limit, timeout, atau gangguan server, aplikasi otomatis mencoba Groq dengan model `qwen/qwen3.8-27b`. File `.env` dimuat otomatis saat aplikasi mulai. Setelah mengubah nilainya, jalankan ulang aplikasi. Model dapat diganti lewat `OPENROUTER_MODEL` dan `GROQ_MODEL`. Jangan masukkan API key ke source code atau repositori. Sumber menyediakan `PDTY ALL` sebagai produktivitas agregat, tanpa pemisahan excavator dan hauler.
+Isi `GROQ_API_KEY` dan `OPENROUTER_API_KEY`. Groq menjadi provider utama dengan model `qwen/qwen3.8-27b`; saat terkena limit, timeout, atau gangguan server, aplikasi otomatis mencoba OpenRouter dengan model gratis `z-ai/glm-5.2:free`. File `.env` dimuat otomatis saat aplikasi mulai. Setelah mengubah nilainya, jalankan ulang aplikasi. Model dapat diganti lewat `GROQ_MODEL` dan `OPENROUTER_MODEL`. Jangan masukkan API key ke source code atau repositori. Sumber menyediakan `PDTY ALL` sebagai produktivitas agregat, tanpa pemisahan excavator dan hauler.
 
 ### Video Rekaman
 

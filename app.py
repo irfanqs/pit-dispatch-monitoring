@@ -1426,12 +1426,12 @@ def production_data() -> tuple[Any, int] | Any:
 @app.post("/api/production/chat")
 def production_chat() -> tuple[Any, int] | Any:
     """Answer production questions using only the currently selected dashboard data."""
-    provider = os.environ.get("AI_PROVIDER", "openrouter").strip().lower()
+    provider = os.environ.get("AI_PROVIDER", "groq").strip().lower()
     provider_config = {
         "openrouter": {
             "api_key": os.environ.get("OPENROUTER_API_KEY", "").strip(),
             "api_url": "https://openrouter.ai/api/v1/chat/completions",
-            "model": os.environ.get("OPENROUTER_MODEL", "nvidia/nemotron-3.5-lightning:free"),
+            "model": os.environ.get("OPENROUTER_MODEL", "z-ai/glm-5.2:free"),
             "key_name": "OPENROUTER_API_KEY",
             "provider_name": "OpenRouter",
         },
@@ -1444,7 +1444,7 @@ def production_chat() -> tuple[Any, int] | Any:
         },
     }
     fallback_provider = os.environ.get(
-        "AI_FALLBACK_PROVIDER", "groq" if provider == "openrouter" else ""
+        "AI_FALLBACK_PROVIDER", "openrouter" if provider == "groq" else ""
     ).strip().lower()
     if provider not in provider_config or fallback_provider not in {"", "openrouter", "groq"}:
         return jsonify(error="AI_PROVIDER harus diisi openrouter atau groq."), 500

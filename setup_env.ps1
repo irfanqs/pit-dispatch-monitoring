@@ -9,10 +9,10 @@ if (Test-Path $envPath) {
 }
 else {
     @(
-        "AI_PROVIDER=openrouter",
-        "AI_FALLBACK_PROVIDER=groq",
-        "OPENROUTER_MODEL=z-ai/glm-5.2:free",
-        "GROQ_MODEL=qwen/qwen3.8-27b"
+        "AI_PROVIDER=groq",
+        "AI_FALLBACK_PROVIDER=openrouter",
+        "GROQ_MODEL=qwen/qwen3.8-27b",
+        "OPENROUTER_MODEL=z-ai/glm-5.2:free"
     ) | ForEach-Object { $lines.Add($_) }
 }
 
@@ -46,16 +46,21 @@ function Set-EnvValue([string] $Name, [string] $Value) {
     $pattern = '^\s*' + [Regex]::Escape($Name) + '\s*='
     for ($index = 0; $index -lt $lines.Count; $index++) {
         if ($lines[$index] -match $pattern) {
-            $lines[$index] = "$Name=$Value"
-            return
+            $newLine = "$Name=$Value"
+            if ($lines[$index] -ceq $newLine) {
+                return $false
+            }
+            $lines[$index] = $newLine
+            return $true
         }
     }
-    $lines.Add("$Name=$Value")
+    [void]$lines.Add("$Name=$Value")
+    return $true
 }
 
 try {
     $changed = $false
-    foreach ($keyName in @("OPENROUTER_API_KEY", "GROQ_API_KEY")) {
+    foreach ($keyName in @("GROQ_API_KEY", "OPENROUTER_API_KEY")) {
         if ([string]::IsNullOrWhiteSpace((Get-EnvValue $keyName))) {
             $providerName = if ($keyName -eq "OPENROUTER_API_KEY") { "OpenRouter" } else { "Groq fallback" }
             $keyValue = Read-ApiKey "$providerName API key"
@@ -69,6 +74,9 @@ try {
             $changed = $true
         }
     }
+
+    if (Set-EnvValue "AI_PROVIDER" "groq") { $changed = $true }
+    if (Set-EnvValue "AI_FALLBACK_PROVIDER" "openrouter") { $changed = $true }
 
     if ($changed) {
         [System.IO.File]::WriteAllLines($envPath, $lines.ToArray(), [System.Text.UTF8Encoding]::new($false))
