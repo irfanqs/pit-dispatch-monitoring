@@ -12,12 +12,8 @@ const measurementCount = document.querySelector("#measurement-count");
 const speedTrend = document.querySelector("#speed-trend");
 const speedDistribution = document.querySelector("#speed-distribution");
 const segmentList = document.querySelector("#segment-list");
-const sourceSheetTable = document.querySelector("#source-sheet-table");
-const sourceSheetCount = document.querySelector("#source-sheet-count");
+const sourceSheetPeriod = document.querySelector("#source-sheet-period");
 const sourceSheetError = document.querySelector("#source-sheet-error");
-const sourceSheetPage = document.querySelector("#source-sheet-page");
-const sourceSheetPrevious = document.querySelector("#source-sheet-previous");
-const sourceSheetNext = document.querySelector("#source-sheet-next");
 const sourceSheetDateFilter = document.querySelector("#source-sheet-date-filter");
 const sourceSheetStart = document.querySelector("#source-sheet-start");
 const sourceSheetEnd = document.querySelector("#source-sheet-end");
@@ -26,9 +22,11 @@ const sourceSheetTotal = document.querySelector("#source-sheet-total");
 const sourceSheetRows = document.querySelector("#source-sheet-rows");
 const sourceSheetExcavators = document.querySelector("#source-sheet-excavators");
 const sourceSheetTrend = document.querySelector("#source-sheet-trend");
+const sourceSheetTrendLabel = document.querySelector("#source-sheet-trend-label");
 const sourceSheetCategories = document.querySelector("#source-sheet-categories");
+const problemTop10 = document.querySelector("#problem-top10");
+const problemFrequency = document.querySelector("#problem-frequency");
 let activeSourceSheet = "DATA_BCM";
-let activeSourceSheetPage = 1;
 let activeSourceSheetDates = { start: "", end: "" };
 
 function number(value) {
@@ -146,45 +144,29 @@ async function loadReport(filename) {
   renderReport(report);
 }
 
-function renderSourceSheet(payload) {
-  sourceSheetTable.replaceChildren();
-  const header = document.createElement("thead");
-  const headerRow = document.createElement("tr");
-  payload.columns.forEach((column) => {
-    const cell = document.createElement("th");
-    cell.scope = "col";
-    cell.textContent = column;
-    headerRow.append(cell);
-  });
-  header.append(headerRow);
+function formatSheetDate(isoDate) {
+  return new Date(`${isoDate}T00:00:00`).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
+}
 
-  const body = document.createElement("tbody");
-  payload.rows.forEach((row) => {
-    const tableRow = document.createElement("tr");
-    payload.columns.forEach((_, index) => {
-      const cell = document.createElement("td");
-      cell.textContent = row[index] || "";
-      tableRow.append(cell);
-    });
-    body.append(tableRow);
-  });
-  sourceSheetTable.append(header, body);
-  sourceSheetCount.textContent = `${number(payload.total_rows)} baris`;
+function renderSourceSheet(payload) {
+  const { trend } = payload.summary;
+  sourceSheetPeriod.textContent = trend.length
+    ? `${formatSheetDate(trend[0].date)} – ${formatSheetDate(trend[trend.length - 1].date)}`
+    : "Tidak ada data";
   sourceSheetRows.textContent = number(payload.total_rows);
   sourceSheetTotal.textContent = number(payload.summary.total_sum);
   sourceSheetExcavators.textContent = number(payload.summary.excavators);
-  sourceSheetPage.textContent = `Halaman ${payload.page} dari ${payload.total_pages}`;
-  sourceSheetPrevious.disabled = payload.page <= 1;
-  sourceSheetNext.disabled = payload.page >= payload.total_pages;
-  activeSourceSheetPage = payload.page;
-  renderSourceSheetTrend(payload.summary.trend);
+  renderSourceSheetTrend(trend);
   renderSourceSheetCategories(payload.summary.categories);
+  renderProblemTop10(payload.problems);
+  renderProblemFrequency(payload.problems);
   sourceSheetError.hidden = true;
 }
 
 function renderSourceSheetTrend(trend) {
   sourceSheetTrend.replaceChildren();
   const recent = trend.slice(-14);
+  sourceSheetTrendLabel.textContent = `${recent.length} tanggal terakhir`;
   if (!recent.length) {
     sourceSheetTrend.textContent = "Tidak ada data pada rentang tanggal ini.";
     return;
@@ -232,13 +214,94 @@ function renderSourceSheetCategories(categories) {
   });
 }
 
-async function loadSourceSheet(sheet = activeSourceSheet, page = activeSourceSheetPage, dates = activeSourceSheetDates) {
+function renderProblemTop10(problems) {
+  problemTop10.replaceChildren();
+  if (!problems.length) {
+    problemTop10.textContent = "Tidak ada problem pada rentang tanggal ini.";
+    return;
+  }
+  const maximum = Math.max(...problems.map((item) => item.bcm), 1);
+  problems.forEach((item) => {
+    const column = document.createElement("div");
+    column.className = "problem-column";
+    column.setAttribute("role", "listitem");
+    column.title = `${item.name}: ${number(item.bcm)} BCM, ${number(item.freq)}x`;
+    const frequency = document.createElement("span");
+    frequency.className = "problem-freq";
+    frequency.textContent = `${number(item.freq)}x`;
+    const volume = document.createElement("strong");
+    volume.textContent = number(Math.round(item.bcm));
+    const track = document.createElement("div");
+    track.className = "problem-track";
+    const bar = document.createElement("i");
+    bar.style.setProperty("--bar-height", `${Math.max(2, item.bcm / maximum * 100)}%`);
+    // Labels ride on top of each bar, as in the sheet's own Top 10 chart.
+    track.append(frequency, volume, bar);
+    const label = document.createElement("span");
+    label.className = "problem-label";
+    label.textContent = item.name;
+    column.append(track, label);
+    problemTop10.append(column);
+  });
+}
+
+function renderProblemFrequency(problems) {
+  problemFrequency.replaceChildren();
+  if (!problems.length) {
+    problemFrequency.textContent = "Tidak ada problem pada rentang tanggal ini.";
+    return;
+  }
+  // Volume and frequency use separate scales side by side instead of one dual-axis chart.
+  const maxVolume = Math.max(...problems.map((item) => item.bcm), 1);
+  const maxFrequency = Math.max(...problems.map((item) => item.freq), 1);
+  const header = document.createElement("div");
+  header.className = "problem-compare-row problem-compare-header";
+  header.setAttribute("role", "row");
+  ["Problem", "Volume (BCM)", "Frekuensi (x)"].forEach((text) => {
+    const cell = document.createElement("span");
+    cell.setAttribute("role", "columnheader");
+    cell.textContent = text;
+    header.append(cell);
+  });
+  problemFrequency.append(header);
+
+  const measureCell = (value, maximum, className, text) => {
+    const cell = document.createElement("div");
+    cell.className = `problem-measure ${className}`;
+    cell.setAttribute("role", "cell");
+    const track = document.createElement("div");
+    track.className = "source-trend-track";
+    const bar = document.createElement("i");
+    bar.style.setProperty("--bar-width", `${Math.max(2, value / maximum * 100)}%`);
+    track.append(bar);
+    const label = document.createElement("strong");
+    label.textContent = text;
+    cell.append(track, label);
+    return cell;
+  };
+  problems.forEach((item) => {
+    const row = document.createElement("div");
+    row.className = "problem-compare-row";
+    row.setAttribute("role", "row");
+    const name = document.createElement("span");
+    name.setAttribute("role", "rowheader");
+    name.textContent = item.name;
+    row.append(
+      name,
+      measureCell(item.bcm, maxVolume, "measure-bcm", number(Math.round(item.bcm))),
+      measureCell(item.freq, maxFrequency, "measure-freq", `${number(item.freq)}x`),
+    );
+    problemFrequency.append(row);
+  });
+}
+
+async function loadSourceSheet(sheet = activeSourceSheet, dates = activeSourceSheetDates) {
   activeSourceSheet = sheet;
   activeSourceSheetDates = dates;
-  sourceSheetCount.textContent = "Memuat data...";
+  sourceSheetPeriod.textContent = "Memuat data...";
   sourceSheetError.hidden = true;
   try {
-    const params = new URLSearchParams({ sheet, page: String(page) });
+    const params = new URLSearchParams({ sheet });
     if (dates.start) params.set("start", dates.start);
     if (dates.end) params.set("end", dates.end);
     const response = await fetch(`/api/dashboard/source-sheet?${params}`, { cache: "no-store" });
@@ -246,8 +309,9 @@ async function loadSourceSheet(sheet = activeSourceSheet, page = activeSourceShe
     if (!response.ok) throw new Error(payload.error || "Data spreadsheet tidak dapat dimuat.");
     renderSourceSheet(payload);
   } catch (error) {
-    sourceSheetTable.replaceChildren();
-    sourceSheetCount.textContent = "";
+    sourceSheetPeriod.textContent = "";
+    problemTop10.replaceChildren();
+    problemFrequency.replaceChildren();
     sourceSheetError.textContent = error.message;
     sourceSheetError.hidden = false;
   }
@@ -260,20 +324,18 @@ document.querySelectorAll(".source-sheet-tab").forEach((tab) => {
       item.classList.toggle("active", selected);
       item.setAttribute("aria-selected", String(selected));
     });
-    loadSourceSheet(tab.dataset.sheet, 1);
+    loadSourceSheet(tab.dataset.sheet);
   });
 });
 sourceSheetDateFilter.addEventListener("submit", (event) => {
   event.preventDefault();
-  loadSourceSheet(activeSourceSheet, 1, { start: sourceSheetStart.value, end: sourceSheetEnd.value });
+  loadSourceSheet(activeSourceSheet, { start: sourceSheetStart.value, end: sourceSheetEnd.value });
 });
 sourceSheetReset.addEventListener("click", () => {
   sourceSheetStart.value = "";
   sourceSheetEnd.value = "";
-  loadSourceSheet(activeSourceSheet, 1, { start: "", end: "" });
+  loadSourceSheet(activeSourceSheet, { start: "", end: "" });
 });
-sourceSheetPrevious.addEventListener("click", () => loadSourceSheet(activeSourceSheet, activeSourceSheetPage - 1));
-sourceSheetNext.addEventListener("click", () => loadSourceSheet(activeSourceSheet, activeSourceSheetPage + 1));
 
 async function initializeDashboard() {
   loadSourceSheet();

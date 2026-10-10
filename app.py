@@ -1276,18 +1276,60 @@ def dashboard() -> str:
     return render_template("dashboard.html")
 
 
+def filter_source_sheet_rows(rows: list[list[str]], start_date: date | None, end_date: date | None) -> list[list[str]]:
+    """Keep source sheet data rows whose first-column date falls inside the inclusive range."""
+    if not (start_date or end_date):
+        return rows
+    return [
+        row
+        for row in rows
+        if row and (row_date := parse_source_sheet_date(row[0]))
+        and (not start_date or row_date >= start_date)
+        and (not end_date or row_date <= end_date)
+    ]
+
+
+def source_sheet_number(value: str) -> float:
+    """Parse a source sheet cell, treating unparseable text as zero."""
+    try:
+        return parse_sheet_number(value)
+    except ValueError:
+        return 0.0
+
+
+def problem_totals(headers: list[str], rows: list[list[str]]) -> dict[str, float]:
+    """Sum every problem column between Shift and Sum, keyed by its label without the group prefix."""
+    if "Sum" not in headers:
+        return {}
+    totals: dict[str, float] = defaultdict(float)
+    for index in range(3, headers.index("Sum")):
+        # Headers repeat the group as a prefix ("Jalan Jalan Licin"); the sheet's own charts show "Jalan Licin".
+        label = " ".join(headers[index].split()[1:])
+        for row in rows:
+            if index < len(row):
+                totals[label] += source_sheet_number(row[index])
+    return totals
+
+
+def top_problems(start_date: date | None, end_date: date | None, limit: int = 10) -> list[dict[str, Any]]:
+    """Rank problems by lost BCM volume from DATA_BCM and pair each with its DATA_QTY frequency."""
+    bcm_rows = load_source_sheet_rows("DATA_BCM")
+    qty_rows = load_source_sheet_rows("DATA_QTY")
+    volumes = problem_totals(bcm_rows[0], filter_source_sheet_rows(bcm_rows[1:], start_date, end_date)) if bcm_rows else {}
+    frequencies = problem_totals(qty_rows[0], filter_source_sheet_rows(qty_rows[1:], start_date, end_date)) if qty_rows else {}
+    ranked = sorted((item for item in volumes.items() if item[1] > 0), key=lambda item: item[1], reverse=True)
+    return [
+        {"name": name, "bcm": round(volume, 2), "freq": round(frequencies.get(name, 0))}
+        for name, volume in ranked[:limit]
+    ]
+
+
 @app.get("/api/dashboard/source-sheet")
 def dashboard_source_sheet() -> tuple[Any, int] | Any:
-    """Return a page of rows from an approved source spreadsheet tab."""
+    """Summarize an approved source spreadsheet tab and the top problems for the selected date range."""
     sheet_name = request.args.get("sheet", "DATA_BCM")
     if sheet_name not in SOURCE_DATA_SHEETS:
         return jsonify(error="Sheet tidak tersedia."), 404
-    try:
-        page = max(1, request.args.get("page", 1, type=int))
-        rows = load_source_sheet_rows(sheet_name)
-    except requests.RequestException:
-        logger.exception("Failed to load spreadsheet tab %s", sheet_name)
-        return jsonify(error="Data spreadsheet tidak dapat dimuat."), 502
 
     start_value = request.args.get("start", "").strip()
     end_value = request.args.get("end", "").strip()
@@ -1299,56 +1341,38 @@ def dashboard_source_sheet() -> tuple[Any, int] | Any:
     if start_date and end_date and start_date > end_date:
         return jsonify(error="Tanggal mulai harus sebelum atau sama dengan tanggal akhir."), 400
 
-    page_size = 25
+    try:
+        rows = load_source_sheet_rows(sheet_name)
+        problems = top_problems(start_date, end_date)
+    except requests.RequestException:
+        logger.exception("Failed to load spreadsheet tab %s", sheet_name)
+        return jsonify(error="Data spreadsheet tidak dapat dimuat."), 502
+
     headers = rows[0] if rows else []
-    data_rows = rows[1:]
-    if start_date or end_date:
-        data_rows = [
-            row
-            for row in data_rows
-            if row and (row_date := parse_source_sheet_date(row[0]))
-            and (not start_date or row_date >= start_date)
-            and (not end_date or row_date <= end_date)
-        ]
-    total_rows = len(data_rows)
-
-    def numeric_value(value: str) -> float:
-        try:
-            return parse_sheet_number(value)
-        except ValueError:
-            return 0.0
-
+    data_rows = filter_source_sheet_rows(rows[1:], start_date, end_date)
     sum_index = headers.index("Sum") if "Sum" in headers else None
-    date_index = 0
     excavator_index = headers.index("Exa") if "Exa" in headers else None
     group_totals: dict[str, float] = defaultdict(float)
     daily_totals: dict[date, float] = defaultdict(float)
     excavators = set()
+    total_sum = 0.0
     for row in data_rows:
-        row_total = numeric_value(row[sum_index]) if sum_index is not None and sum_index < len(row) else 0.0
-        row_date = parse_source_sheet_date(row[date_index]) if row else None
-        if row_date:
+        row_total = source_sheet_number(row[sum_index]) if sum_index is not None and sum_index < len(row) else 0.0
+        total_sum += row_total
+        if row_date := parse_source_sheet_date(row[0]):
             daily_totals[row_date] += row_total
         if excavator_index is not None and excavator_index < len(row) and row[excavator_index].strip():
             excavators.add(row[excavator_index].strip())
         for index, column in enumerate(headers):
             group = column.split(maxsplit=1)[0] if column else ""
             if group in {"Front", "Jalan", "Disposal", "Material", "Equipment", "Other"} and index < len(row):
-                group_totals[group] += numeric_value(row[index])
+                group_totals[group] += source_sheet_number(row[index])
 
-    total_pages = max(1, math.ceil(total_rows / page_size))
-    page = min(page, total_pages)
-    start = (page - 1) * page_size
     return jsonify(
         sheet=sheet_name,
-        columns=headers,
-        rows=data_rows[start : start + page_size],
-        page=page,
-        page_size=page_size,
-        total_rows=total_rows,
-        total_pages=total_pages,
+        total_rows=len(data_rows),
         summary={
-            "total_sum": round(sum(numeric_value(row[sum_index]) for row in data_rows if sum_index is not None and sum_index < len(row)), 2),
+            "total_sum": round(total_sum, 2),
             "excavators": len(excavators),
             "categories": [
                 {"name": name, "value": round(value, 2)}
@@ -1360,6 +1384,7 @@ def dashboard_source_sheet() -> tuple[Any, int] | Any:
                 for day, value in sorted(daily_totals.items())
             ],
         },
+        problems=problems,
     )
 
 
