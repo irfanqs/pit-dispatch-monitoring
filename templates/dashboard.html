@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light dark">
     <title>Dashboard Laporan - Pit Dispatch Monitoring</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='20261010-1') }}">
   </head>
   <body>
     <main class="shell dashboard-shell">
@@ -21,8 +21,8 @@
       <section class="report-hero" aria-labelledby="dashboard-title">
         <div>
           <span class="kicker">Laporan operasional</span>
-          <h1 id="dashboard-title">Data lapangan, terbaca dalam sekali pandang.</h1>
-          <p>Pilih laporan Excel Pit Dispatch Monitoring untuk melihat ringkasan kendaraan, kecepatan, dan kualitas deteksi dalam tampilan visual.</p>
+          <h1 id="dashboard-title">Dashboard Laporan</h1>
+          <p>Ringkasan kendaraan, kecepatan, dan kualitas deteksi dari laporan Excel analisis. Data spreadsheet Production Exec ada di bagian bawah.</p>
         </div>
         <label class="report-select-label" for="report-select">
           <span>Pilih laporan Excel</span>
@@ -38,6 +38,38 @@
         <a class="download-link" href="/">Buka analisis</a>
       </section>
 
+      <section id="dashboard-content" hidden>
+        <div class="report-context">
+          <div>
+            <span id="report-source" class="report-source"></span>
+            <p id="report-meta"></p>
+          </div>
+          <a id="download-report" class="secondary-link" download>Unduh Excel</a>
+        </div>
+
+        <section class="metric-grid" aria-label="Ringkasan metrik">
+          <article class="metric-card"><span>Kendaraan terkonfirmasi</span><strong id="metric-vehicles">0</strong><small>Tracker stabil dalam laporan</small></article>
+          <article class="metric-card"><span>Deteksi tercatat</span><strong id="metric-detections">0</strong><small>Frame yang lolos pencatatan</small></article>
+          <article class="metric-card metric-accent"><span>Kecepatan rata-rata</span><strong><span id="metric-average-speed">0</span><em>km/h</em></strong><small>Dari seluruh pengukuran</small></article>
+          <article class="metric-card"><span>Kecepatan tertinggi</span><strong><span id="metric-max-speed">0</span><em>km/h</em></strong><small>Nilai puncak terukur</small></article>
+        </section>
+
+        <section class="dashboard-grid">
+          <article class="chart-panel chart-panel-wide">
+            <div class="panel-heading"><div><span class="kicker">Tren</span><h2>Kecepatan rata-rata per menit</h2></div><span id="measurement-count" class="panel-stat"></span></div>
+            <div id="speed-trend" class="line-chart" aria-label="Grafik tren kecepatan"></div>
+          </article>
+          <article class="chart-panel">
+            <div class="panel-heading"><div><span class="kicker">Sebaran</span><h2>Kelompok kecepatan</h2></div></div>
+            <div id="speed-distribution" class="bar-chart" aria-label="Grafik distribusi kecepatan"></div>
+          </article>
+          <article class="chart-panel">
+            <div class="panel-heading"><div><span class="kicker">Area</span><h2>Aktivitas per segmen</h2></div></div>
+            <div id="segment-list" class="segment-list"></div>
+          </article>
+        </section>
+
+      </section>
       <section class="source-sheet-panel" aria-labelledby="source-sheets-title">
         <div class="panel-heading">
           <div><span class="kicker">Data spreadsheet</span><h2 id="source-sheets-title">Production Exec</h2></div>
@@ -81,39 +113,6 @@
           <span id="source-sheet-page">Halaman 1</span>
           <button id="source-sheet-next" class="secondary-button" type="button" disabled>Berikutnya</button>
         </div>
-      </section>
-
-      <section id="dashboard-content" hidden>
-        <div class="report-context">
-          <div>
-            <span id="report-source" class="report-source"></span>
-            <p id="report-meta"></p>
-          </div>
-          <a id="download-report" class="secondary-link" download>Unduh Excel</a>
-        </div>
-
-        <section class="metric-grid" aria-label="Ringkasan metrik">
-          <article class="metric-card"><span>Kendaraan terkonfirmasi</span><strong id="metric-vehicles">0</strong><small>Tracker stabil dalam laporan</small></article>
-          <article class="metric-card"><span>Deteksi tercatat</span><strong id="metric-detections">0</strong><small>Frame yang lolos pencatatan</small></article>
-          <article class="metric-card metric-accent"><span>Kecepatan rata-rata</span><strong><span id="metric-average-speed">0</span><em>km/h</em></strong><small>Dari seluruh pengukuran</small></article>
-          <article class="metric-card"><span>Kecepatan tertinggi</span><strong><span id="metric-max-speed">0</span><em>km/h</em></strong><small>Nilai puncak terukur</small></article>
-        </section>
-
-        <section class="dashboard-grid">
-          <article class="chart-panel chart-panel-wide">
-            <div class="panel-heading"><div><span class="kicker">Tren</span><h2>Kecepatan rata-rata per menit</h2></div><span id="measurement-count" class="panel-stat"></span></div>
-            <div id="speed-trend" class="line-chart" aria-label="Grafik tren kecepatan"></div>
-          </article>
-          <article class="chart-panel">
-            <div class="panel-heading"><div><span class="kicker">Sebaran</span><h2>Kelompok kecepatan</h2></div></div>
-            <div id="speed-distribution" class="bar-chart" aria-label="Grafik distribusi kecepatan"></div>
-          </article>
-          <article class="chart-panel">
-            <div class="panel-heading"><div><span class="kicker">Area</span><h2>Aktivitas per segmen</h2></div></div>
-            <div id="segment-list" class="segment-list"></div>
-          </article>
-        </section>
-
       </section>
     </main>
     <script src="{{ url_for('static', filename='dashboard.js') }}"></script>

@@ -12,7 +12,7 @@ else {
         "AI_PROVIDER=groq",
         "AI_FALLBACK_PROVIDER=openrouter",
         "GROQ_MODEL=qwen/qwen3.8-27b",
-        "OPENROUTER_MODEL=z-ai/glm-5.2:free"
+        "OPENROUTER_MODEL=nvidia/nemotron-3-super-120b-a12b:free"
     ) | ForEach-Object { $lines.Add($_) }
 }
 

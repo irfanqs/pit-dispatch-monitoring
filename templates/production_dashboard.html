@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
   <title>Produksi Tambang - Pit Dispatch Monitoring</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='20260925-6') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='20261010-2') }}">
 </head>
 <body>
   <main class="shell dashboard-shell">
@@ -18,25 +18,23 @@
       </nav>
     </header>
 
-    <section class="report-hero">
-      <div>
-        <span class="kicker">Mining Production Dashboard</span>
-        <h1>Laporan Operasional Tambang</h1>
-        <p>Ringkasan komprehensif produksi material, pencapaian target OB/Coal/SR, catatan cuaca, kesiapan armada (PA), serta utilisasi unit (UA & UO).</p>
-      </div>
-      <div class="date-filter">
-        <label>Mulai<input id="production-start" type="date"></label>
-        <label>Sampai<input id="production-end" type="date"></label>
-        <button id="apply-production-filter" type="button">Terapkan</button>
-      </div>
+    <section class="page-header">
+      <span class="kicker">Mining Production Dashboard</span>
+      <h1>Laporan Operasional Tambang</h1>
+      <p>Produksi OB/Coal/SR, material, cuaca, kesiapan armada (PA), dan utilisasi unit (UA &amp; UO) dari spreadsheet harian.</p>
     </section>
+
+    <form id="production-filter" class="filter-bar" aria-label="Filter tanggal produksi">
+      <label>Mulai<input id="production-start" type="date"></label>
+      <label>Sampai<input id="production-end" type="date"></label>
+      <button type="submit">Terapkan</button>
+      <button id="reset-production-filter" class="secondary-button" type="button">Semua data</button>
+      <p id="production-range" class="filter-range" aria-live="polite">Memuat data…</p>
+    </form>
 
     <p id="production-error" class="production-error" hidden></p>
 
     <section id="production-content" hidden>
-      <p id="production-range" class="report-source"></p>
-
-      <!-- 1. BARIS PRODUCTION PLAN VS ACTUAL (OB, COAL, SR, PRODUCTIVITY) -->
       <section class="dashboard-section">
         <div class="section-title">
           <span class="kicker">Production Review</span>
@@ -81,10 +79,8 @@
             </div>
           </article>
         </div>
-        <div id="production-comparison" class="comparison-chart" aria-label="Grafik perbandingan plan dan actual produksi"></div>
       </section>
 
-      <!-- 2. BARIS MATERIAL (HIJAU MUDA) -->
       <section class="dashboard-section material-section">
         <div class="section-title">
           <span class="kicker">Material Review</span>
@@ -93,7 +89,6 @@
         <div id="material-chart" class="material-grid"></div>
       </section>
 
-      <!-- 3. BARIS WEATHER REVIEW (KUNING) -->
       <section class="dashboard-section weather-section">
         <div class="section-title">
           <span class="kicker">Weather Review</span>
@@ -121,10 +116,8 @@
             <small>Rata-rata intensitas</small>
           </div>
         </div>
-        <div id="weather-chart" class="horizontal-chart" aria-label="Grafik durasi cuaca"></div>
       </section>
 
-      <!-- 4. BARIS FLEET & PA (PINK) -->
       <section class="dashboard-section fleet-section">
         <div class="section-title">
           <span class="kicker">Fleet & Availability (PA)</span>
@@ -153,10 +146,8 @@
             </div>
           </article>
         </div>
-        <div id="fleet-chart" class="comparison-chart" aria-label="Grafik fleet dan PA"></div>
       </section>
 
-      <!-- 5. BARIS UTILIZATION (UA & UO) -->
       <section class="dashboard-section util-section">
         <div class="section-title">
           <span class="kicker">Utilization Review</span>
@@ -178,22 +169,16 @@
             </div>
           </article>
         </div>
-        <div id="util-chart" class="comparison-chart" aria-label="Grafik UA dan UO"></div>
       </section>
 
     </section>
   </main>
   <button id="production-chat-toggle" class="production-chat-toggle" type="button" aria-label="Buka chat produksi"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 4h16v12H9l-5 4V4Zm4 5h8M8 12h5" /></svg><span>Tanya AI</span></button>
   <section id="production-chat" class="production-chat" aria-label="Chat produksi" hidden>
-    <header class="production-chat-header"><div><strong>Asisten Produksi</strong><small>Periode chat independen dari dashboard</small></div><button id="production-chat-close" type="button" aria-label="Tutup chat">×</button></header>
-    <div class="production-chat-range">
-      <label>Mulai<input id="production-chat-start" type="date"></label>
-      <label>Sampai<input id="production-chat-end" type="date"></label>
-      <small>Kosongkan tanggal untuk mencari semua data tersedia.</small>
-    </div>
-    <div id="production-chat-messages" class="production-chat-messages" aria-live="polite"><p class="chat-message assistant">Tanyakan ringkasan produksi, target, material, cuaca, fleet, PA, UA, atau UO.</p></div>
+    <header class="production-chat-header"><div><strong>Asisten Produksi</strong><small id="production-chat-scope">Semua tanggal bisa ditanya</small></div><button id="production-chat-close" type="button" aria-label="Tutup chat">×</button></header>
+    <div id="production-chat-messages" class="production-chat-messages" aria-live="polite"><p class="chat-message assistant">Tanyakan produksi, target, material, cuaca, fleet, PA, UA, atau UO untuk tanggal atau bulan mana pun, misalnya "OB 3 Maret 2025".</p></div>
     <form id="production-chat-form" class="production-chat-form"><input id="production-chat-input" type="text" maxlength="1000" placeholder="Tanyakan data produksi…" autocomplete="off" required><button type="submit">Kirim</button></form>
   </section>
-  <script src="{{ url_for('static', filename='production_dashboard.js', v='20260925-6') }}"></script>
+  <script src="{{ url_for('static', filename='production_dashboard.js', v='20261010-2') }}"></script>
 </body>
 </html>

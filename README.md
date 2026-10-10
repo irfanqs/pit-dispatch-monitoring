@@ -62,7 +62,7 @@ Di Windows, jalankan `run_dashboard.bat`. Launcher menarik perubahan dengan `git
 
 ### Chat Produksi AI
 
-Pada `/production-dashboard`, tombol **Tanya AI** membuka chat yang menjawab berdasarkan data dan rentang tanggal dashboard aktif. Provider default adalah OpenRouter dengan model gratis `z-ai/glm-5.2:free`. Atur API key di file `.env` sebelum menjalankan aplikasi:
+Pada `/production-dashboard`, tombol **Tanya AI** membuka chat yang menjawab berdasarkan seluruh data produksi. Provider utama adalah Groq, dengan fallback OpenRouter model gratis `nvidia/nemotron-3-super-120b-a12b:free`. Atur API key di file `.env` sebelum menjalankan aplikasi:
 
 ```bash
 cp .env.example .env
@@ -70,7 +70,7 @@ cp .env.example .env
 python app.py
 ```
 
-Isi `GROQ_API_KEY` dan `OPENROUTER_API_KEY`. Groq menjadi provider utama dengan model `qwen/qwen3.8-27b`; saat terkena limit, timeout, atau gangguan server, aplikasi otomatis mencoba OpenRouter dengan model gratis `z-ai/glm-5.2:free`. Filter tanggal di popup chat terpisah dari filter dashboard; tanggal kosong berarti chatbot memakai semua tanggal yang tersedia. File `.env` dimuat otomatis saat aplikasi mulai. Setelah mengubah nilainya, jalankan ulang aplikasi. Model dapat diganti lewat `GROQ_MODEL` dan `OPENROUTER_MODEL`. Jangan masukkan API key ke source code atau repositori. Sumber menyediakan `PDTY ALL` sebagai produktivitas agregat, tanpa pemisahan excavator dan hauler.
+Isi `GROQ_API_KEY` dan `OPENROUTER_API_KEY`. Groq menjadi provider utama dengan model `qwen/qwen3.8-27b`; saat terkena limit, timeout, atau gangguan server, aplikasi otomatis mencoba OpenRouter dengan model gratis `nvidia/nemotron-3-super-120b-a12b:free`. Chat bisa ditanya tentang tanggal mana pun, tidak terbatas filter dashboard: chatbot selalu menerima total semua data dan rincian per bulan, ringkasan filter dashboard yang aktif, serta rincian harian untuk bulan yang disebut di pertanyaan (maksimal 62 hari per pertanyaan). File `.env` dimuat otomatis saat aplikasi mulai. Setelah mengubah nilainya, jalankan ulang aplikasi. Model dapat diganti lewat `GROQ_MODEL` dan `OPENROUTER_MODEL`. Jangan masukkan API key ke source code atau repositori. Sumber menyediakan `PDTY ALL` sebagai produktivitas agregat, tanpa pemisahan excavator dan hauler.
 
 ### Video Rekaman
 

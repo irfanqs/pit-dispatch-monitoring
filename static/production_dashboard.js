@@ -5,6 +5,12 @@ const start = document.querySelector("#production-start");
 const end = document.querySelector("#production-end");
 const content = document.querySelector("#production-content");
 const error = document.querySelector("#production-error");
+const rangeLabel = document.querySelector("#production-range");
+const chatScope = document.querySelector("#production-chat-scope");
+const formatDate = (isoDate) => new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", year: "numeric" })
+  .format(new Date(`${isoDate}T00:00:00`));
+// Chat gets the last applied filter as context, not dates typed but not yet applied.
+let appliedRange = { start: "", end: "" };
 const refreshIntervalMs = 30_000;
 
 function renderMaterials(materials) {
@@ -47,27 +53,6 @@ function renderProduction(prod) {
 
   // Productivity
   document.querySelector("#productivity-val").textContent = prod.productivity == null ? "Data tidak tersedia" : format(prod.productivity);
-  renderComparisonChart("production-comparison", [
-    { label: "OB", plan: prod.ob.plan, actual: prod.ob.actual },
-    { label: "Coal", plan: prod.coal.plan, actual: prod.coal.actual },
-    { label: "SR", plan: prod.sr.plan, actual: prod.sr.actual },
-  ]);
-}
-
-function renderComparisonChart(targetId, items) {
-  const target = document.querySelector(`#${targetId}`);
-  target.replaceChildren();
-  items.forEach((item) => {
-    const group = document.createElement("div");
-    group.className = "comparison-group";
-    const max = Math.max(item.plan, item.actual, 1);
-    group.innerHTML = `
-      <div class="comparison-heading"><strong>${item.label}</strong><small>Plan ${format(item.plan)} | Actual ${format(item.actual)}</small></div>
-      <div class="comparison-bar"><span>Plan</span><i><b class="plan-bar" style="width:${item.plan / max * 100}%"></b></i><strong>${format(item.plan)}</strong></div>
-      <div class="comparison-bar"><span>Actual</span><i><b class="actual-bar" style="width:${item.actual / max * 100}%"></b></i><strong>${format(item.actual)}</strong></div>
-    `;
-    target.append(group);
-  });
 }
 
 function renderWeather(w) {
@@ -81,23 +66,6 @@ function renderWeather(w) {
   document.querySelector("#w-fog-x").textContent = `${format(w.foggy_freq)} x kejadian`;
 
   document.querySelector("#w-rain-int").textContent = `${format(w.rain_intensity)} mm`;
-  renderHorizontalChart("weather-chart", [
-    { label: "Rain", value: w.rain_hours, suffix: " hrs" },
-    { label: "Slippery", value: w.slippery_hours, suffix: " hrs" },
-    { label: "Foggy", value: w.foggy_hours, suffix: " hrs" },
-  ]);
-}
-
-function renderHorizontalChart(targetId, items) {
-  const target = document.querySelector(`#${targetId}`);
-  target.replaceChildren();
-  const max = Math.max(...items.map((item) => item.value), 1);
-  items.forEach((item) => {
-    const row = document.createElement("div");
-    row.className = "horizontal-row";
-    row.innerHTML = `<span>${item.label}</span><i><b style="width:${item.value / max * 100}%"></b></i><strong>${format(item.value)}${item.suffix || ""}</strong>`;
-    target.append(row);
-  });
 }
 
 function renderFleet(f) {
@@ -109,11 +77,6 @@ function renderFleet(f) {
 
   document.querySelector("#act-pa-supp").textContent = formatPct(f.actual_pa_supp);
   document.querySelector("#plan-pa-supp").textContent = formatPct(f.plan_pa_supp);
-  renderComparisonChart("fleet-chart", [
-    { label: "Running Fleet", plan: f.plan_fleet, actual: f.actual_fleet },
-    { label: "PA Production", plan: f.plan_pa_prod * 100, actual: f.actual_pa_prod * 100 },
-    { label: "PA Support", plan: f.plan_pa_supp * 100, actual: f.actual_pa_supp * 100 },
-  ]);
 }
 
 function renderUtilization(u) {
@@ -122,24 +85,25 @@ function renderUtilization(u) {
 
   document.querySelector("#act-uo").textContent = formatPct(u.actual_uo);
   document.querySelector("#plan-uo").textContent = formatPct(u.plan_uo);
-  renderComparisonChart("util-chart", [
-    { label: "UA", plan: u.plan_ua * 100, actual: u.actual_ua * 100 },
-    { label: "UO", plan: u.plan_uo * 100, actual: u.actual_uo * 100 },
-  ]);
 }
 
-async function load() {
+async function load(range) {
   error.hidden = true;
   const params = new URLSearchParams();
-  if (start.value) params.set("start", start.value);
-  if (end.value) params.set("end", end.value);
+  if (range.start) params.set("start", range.start);
+  if (range.end) params.set("end", range.end);
 
   const response = await fetch(`/api/production?${params}`, { cache: "no-store" });
   const data = await response.json();
   if (!response.ok) throw new Error(data.error);
 
   content.hidden = false;
-  document.querySelector("#production-range").textContent = `Data Operasional Tanggal ${data.range.start} s.d. ${data.range.end}`;
+  appliedRange = range;
+  const rangeText = `${formatDate(data.range.start)} – ${formatDate(data.range.end)}`;
+  rangeLabel.textContent = `${appliedRange.start || appliedRange.end ? "Periode" : "Semua data"}: ${rangeText}`;
+  chatScope.textContent = appliedRange.start || appliedRange.end
+    ? `Semua tanggal bisa ditanya · dashboard: ${rangeText}`
+    : `Semua tanggal bisa ditanya · data ${rangeText}`;
 
   renderMaterials(data.materials);
   renderProduction(data.production);
@@ -153,16 +117,22 @@ function showLoadError(reason) {
   error.hidden = false;
 }
 
-document.querySelector("#apply-production-filter").addEventListener("click", () => load().catch(showLoadError));
-load().catch(showLoadError);
-window.setInterval(() => load().catch(showLoadError), refreshIntervalMs);
+document.querySelector("#production-filter").addEventListener("submit", (event) => {
+  event.preventDefault();
+  load({ start: start.value, end: end.value }).catch(showLoadError);
+});
+document.querySelector("#reset-production-filter").addEventListener("click", () => {
+  start.value = "";
+  end.value = "";
+  load({ start: "", end: "" }).catch(showLoadError);
+});
+load(appliedRange).catch(showLoadError);
+window.setInterval(() => load(appliedRange).catch(showLoadError), refreshIntervalMs);
 
 const chat = document.querySelector("#production-chat");
 const chatMessages = document.querySelector("#production-chat-messages");
 const chatForm = document.querySelector("#production-chat-form");
 const chatInput = document.querySelector("#production-chat-input");
-const chatStart = document.querySelector("#production-chat-start");
-const chatEnd = document.querySelector("#production-chat-end");
 const CHAT_HISTORY_KEY = "speedlens.production-chat-history";
 const chatHistory = (() => {
   try {
@@ -189,7 +159,7 @@ function appendChatMessage(role, text) {
 function renderChatHistory() {
   chatMessages.replaceChildren();
   if (!chatHistory.length) {
-    appendChatMessage("assistant", "Tanyakan ringkasan produksi, target, material, cuaca, fleet, PA, UA, atau UO.");
+    appendChatMessage("assistant", "Tanyakan produksi, target, material, cuaca, fleet, PA, UA, atau UO untuk tanggal atau bulan mana pun, misalnya \"OB 3 Maret 2025\".");
     return;
   }
   chatHistory.forEach(({ role, content }) => appendChatMessage(role, content));
@@ -225,7 +195,7 @@ chatForm.addEventListener("submit", async (event) => {
     const response = await fetch("/api/production/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question, history: chatHistory.slice(-10), start: chatStart.value, end: chatEnd.value }),
+      body: JSON.stringify({ question, history: chatHistory.slice(-10), ...appliedRange }),
     });
     const contentType = response.headers.get("content-type") || "";
     if (!contentType.includes("application/json")) {
