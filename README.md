@@ -62,7 +62,7 @@ Di Windows, jalankan `run_dashboard.bat`. Launcher menarik perubahan dengan `git
 
 ### Chat Produksi AI
 
-Pada `/production-dashboard`, tombol **Tanya AI** membuka chat yang menjawab berdasarkan seluruh data produksi. Provider utama adalah Groq, dengan fallback OpenRouter model gratis `nvidia/nemotron-3-super-120b-a12b:free`. Atur API key di file `.env` sebelum menjalankan aplikasi:
+Pada `/production-dashboard`, tombol **Tanya si Moco** membuka chat yang menjawab berdasarkan seluruh data produksi. Provider utama adalah Groq, dengan fallback OpenRouter model gratis `nvidia/nemotron-3-super-120b-a12b:free`. Atur API key di file `.env` sebelum menjalankan aplikasi:
 
 ```bash
 cp .env.example .env

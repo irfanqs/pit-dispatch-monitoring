@@ -10,7 +10,7 @@
   --accent-strong: #00574d;
   --danger: #a92d2d;
   --radius: 14px;
-  --series-bcm: #2a78d6;
+  --series-bcm: #3aa65a;
   --series-freq: #eb6834;
 }
 
@@ -25,7 +25,7 @@
     --accent: #61c3b0;
     --accent-strong: #84d8c8;
     --danger: #ff9f9f;
-    --series-bcm: #3987e5;
+    --series-bcm: #3aae66;
     --series-freq: #d95926;
   }
 }
@@ -220,13 +220,23 @@ select { width: 100%; padding: 12px; color: var(--text); background: var(--surfa
 .problem-track i { display: block; flex: none; width: min(100%, 44px); height: var(--bar-height); border-radius: 4px 4px 0 0; background: var(--series-bcm); }
 .problem-column:hover .problem-track i { filter: brightness(1.12); }
 .problem-label { align-self: start; color: var(--muted); font-size: 0.72rem; line-height: 1.25; text-align: center; overflow-wrap: anywhere; }
-.problem-compare { display: grid; gap: 10px; }
-.problem-compare-row { display: grid; grid-template-columns: minmax(120px, 1.1fr) minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: 14px; font-size: 0.8rem; }
-.problem-compare-header { color: var(--muted); font-size: 0.74rem; font-weight: 700; }
-.problem-measure { display: grid; grid-template-columns: minmax(40px, 1fr) auto; align-items: center; gap: 8px; }
-.problem-measure strong { min-width: 58px; text-align: right; font-variant-numeric: tabular-nums; }
-.measure-bcm .source-trend-track i { background: var(--series-bcm); }
-.measure-freq .source-trend-track i { background: var(--series-freq); }
+.source-sheet-insight-wide { grid-column: 1 / -1; }
+.source-sheet-insight-wide .panel-heading { flex-wrap: wrap; gap: 8px 20px; }
+.source-sheet-insight-wide .source-sheet-trend { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 36px; }
+.heatmap-note { margin: -6px 0 12px; color: var(--muted); font-size: 0.8rem; }
+.heatmap-key { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 0.76rem; }
+.heatmap-key i { width: 72px; height: 10px; border-radius: 3px; background: linear-gradient(90deg, color-mix(in srgb, var(--series-bcm) 6%, var(--surface)), color-mix(in srgb, var(--series-bcm) 62%, var(--surface))); }
+.excavator-heatmap-wrap { overflow-x: auto; }
+.excavator-heatmap { width: 100%; border-collapse: separate; border-spacing: 2px; font-size: 0.76rem; font-variant-numeric: tabular-nums; }
+.excavator-heatmap th { padding: 4px 6px; color: var(--muted); font-size: 0.7rem; font-weight: 700; line-height: 1.25; text-align: right; vertical-align: bottom; }
+.excavator-heatmap thead th { min-width: 68px; }
+.excavator-heatmap tbody th { vertical-align: middle; }
+.excavator-heatmap th:first-child { position: sticky; left: 0; z-index: 1; min-width: 74px; color: var(--text); text-align: left; background: var(--surface); }
+/* Fill strength is capped so the default text ink keeps its contrast in light and dark mode. */
+.excavator-heatmap td { padding: 7px 6px; border-radius: 4px; text-align: right; background: color-mix(in srgb, var(--series-bcm) calc(var(--heat, 0) * 1%), var(--surface)); }
+.excavator-heatmap td.heat-empty { color: var(--muted); }
+.excavator-heatmap .heat-total { padding-left: 12px; font-weight: 750; background: var(--surface-muted); }
+.excavator-heatmap tbody tr:hover th, .excavator-heatmap tbody tr:hover td { outline: 1px solid var(--line); }
 .vehicle-panel { margin-top: 16px; }
 .production-error { margin: 0 0 20px; color: var(--danger); }
 .production-kpi { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin: 22px 0 16px; }
@@ -303,9 +313,7 @@ select { width: 100%; padding: 12px; color: var(--text); background: var(--surfa
   .source-sheet-kpis { grid-template-columns: 1fr; }
   .problem-columns { grid-template-columns: repeat(5, minmax(0, 1fr)); row-gap: 20px; }
   .problem-column { grid-template-rows: 190px auto; }
-  .problem-compare-row { grid-template-columns: 1fr 1fr; gap: 6px 12px; }
-  .problem-compare-row > :first-child { grid-column: 1 / -1; font-weight: 700; }
-  .problem-compare-header > :first-child { display: none; }
+  .source-sheet-insight-wide .source-sheet-trend { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 600px) {

@@ -1324,9 +1324,38 @@ def top_problems(start_date: date | None, end_date: date | None, limit: int = 10
     ]
 
 
+def excavator_problem_losses(
+    start_date: date | None, end_date: date | None, problem_names: list[str]
+) -> list[dict[str, Any]]:
+    """Break DATA_BCM lost volume down per excavator for the given problems, largest total loss first."""
+    rows = load_source_sheet_rows("DATA_BCM")
+    if not rows or "Exa" not in rows[0]:
+        return []
+    headers = rows[0]
+    excavator_index = headers.index("Exa")
+    rows_by_excavator: dict[str, list[list[str]]] = defaultdict(list)
+    for row in filter_source_sheet_rows(rows[1:], start_date, end_date):
+        excavator = row[excavator_index].strip() if excavator_index < len(row) else ""
+        if excavator:
+            rows_by_excavator[excavator].append(row)
+
+    losses = []
+    for excavator, excavator_rows in rows_by_excavator.items():
+        totals = problem_totals(headers, excavator_rows)
+        # Total covers every problem column, so it can exceed the sum of the listed problems.
+        total = sum(totals.values())
+        if total > 0:
+            losses.append({
+                "name": excavator,
+                "values": [round(totals.get(name, 0.0), 2) for name in problem_names],
+                "total": round(total, 2),
+            })
+    return sorted(losses, key=lambda item: item["total"], reverse=True)
+
+
 @app.get("/api/dashboard/source-sheet")
 def dashboard_source_sheet() -> tuple[Any, int] | Any:
-    """Summarize an approved source spreadsheet tab and the top problems for the selected date range."""
+    """Summarize an approved source spreadsheet tab, the top problems, and their loss per excavator for the selected date range."""
     sheet_name = request.args.get("sheet", "DATA_BCM")
     if sheet_name not in SOURCE_DATA_SHEETS:
         return jsonify(error="Sheet tidak tersedia."), 404
@@ -1344,6 +1373,7 @@ def dashboard_source_sheet() -> tuple[Any, int] | Any:
     try:
         rows = load_source_sheet_rows(sheet_name)
         problems = top_problems(start_date, end_date)
+        excavator_losses = excavator_problem_losses(start_date, end_date, [item["name"] for item in problems])
     except requests.RequestException:
         logger.exception("Failed to load spreadsheet tab %s", sheet_name)
         return jsonify(error="Data spreadsheet tidak dapat dimuat."), 502
@@ -1385,6 +1415,7 @@ def dashboard_source_sheet() -> tuple[Any, int] | Any:
             ],
         },
         problems=problems,
+        excavator_losses=excavator_losses,
     )
 
 

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light dark">
     <title>Dashboard Laporan - Pit Dispatch Monitoring</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='20261010-2') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='20261011-2') }}">
   </head>
   <body>
     <main class="shell dashboard-shell">
@@ -105,17 +105,21 @@
             <div class="panel-heading"><div><span class="kicker">Komposisi</span><h3>Nilai per kelompok</h3></div></div>
             <div id="source-sheet-categories" class="source-sheet-categories"></div>
           </article>
-          <article class="source-sheet-insight">
-            <div class="panel-heading"><div><span class="kicker">Problem productivity</span><h3>Frekuensi vs Volume</h3></div><span class="panel-stat">Urut volume BCM</span></div>
-            <div id="problem-frequency" class="problem-compare" role="table" aria-label="Frekuensi dan volume BCM per problem"></div>
+          <article class="source-sheet-insight source-sheet-insight-wide">
+            <div class="panel-heading">
+              <div><span class="kicker">Problem productivity</span><h3>Loss BCM per Excavator</h3></div>
+              <span class="heatmap-key" aria-hidden="true">Kecil<i></i>Besar</span>
+            </div>
+            <p class="heatmap-note">Top 10 problem dari DATA_BCM. Kolom Total menjumlahkan semua problem. Makin gelap, makin besar loss.</p>
+            <div class="excavator-heatmap-wrap"><table id="excavator-heatmap" class="excavator-heatmap" aria-label="Loss BCM per excavator dan problem"></table></div>
           </article>
-          <article class="source-sheet-insight">
+          <article class="source-sheet-insight source-sheet-insight-wide">
             <div class="panel-heading"><div><span class="kicker">Tren</span><h3>Nilai Sum per hari</h3></div><span id="source-sheet-trend-label" class="panel-stat">14 tanggal terakhir</span></div>
             <div id="source-sheet-trend" class="source-sheet-trend"></div>
           </article>
         </section>
       </section>
     </main>
-    <script src="{{ url_for('static', filename='dashboard.js', v='20261010-2') }}"></script>
+    <script src="{{ url_for('static', filename='dashboard.js', v='20261011-2') }}"></script>
   </body>
 </html>

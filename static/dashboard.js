@@ -25,7 +25,7 @@ const sourceSheetTrend = document.querySelector("#source-sheet-trend");
 const sourceSheetTrendLabel = document.querySelector("#source-sheet-trend-label");
 const sourceSheetCategories = document.querySelector("#source-sheet-categories");
 const problemTop10 = document.querySelector("#problem-top10");
-const problemFrequency = document.querySelector("#problem-frequency");
+const excavatorHeatmap = document.querySelector("#excavator-heatmap");
 let activeSourceSheet = "DATA_BCM";
 let activeSourceSheetDates = { start: "", end: "" };
 
@@ -159,7 +159,7 @@ function renderSourceSheet(payload) {
   renderSourceSheetTrend(trend);
   renderSourceSheetCategories(payload.summary.categories);
   renderProblemTop10(payload.problems);
-  renderProblemFrequency(payload.problems);
+  renderExcavatorHeatmap(payload.problems, payload.excavator_losses);
   sourceSheetError.hidden = true;
 }
 
@@ -245,53 +245,45 @@ function renderProblemTop10(problems) {
   });
 }
 
-function renderProblemFrequency(problems) {
-  problemFrequency.replaceChildren();
-  if (!problems.length) {
-    problemFrequency.textContent = "Tidak ada problem pada rentang tanggal ini.";
+function renderExcavatorHeatmap(problems, losses) {
+  excavatorHeatmap.replaceChildren();
+  if (!problems.length || !losses.length) {
+    const empty = excavatorHeatmap.insertRow().insertCell();
+    empty.className = "heat-empty";
+    empty.textContent = "Tidak ada loss pada rentang tanggal ini.";
     return;
   }
-  // Volume and frequency use separate scales side by side instead of one dual-axis chart.
-  const maxVolume = Math.max(...problems.map((item) => item.bcm), 1);
-  const maxFrequency = Math.max(...problems.map((item) => item.freq), 1);
-  const header = document.createElement("div");
-  header.className = "problem-compare-row problem-compare-header";
-  header.setAttribute("role", "row");
-  ["Problem", "Volume (BCM)", "Frekuensi (x)"].forEach((text) => {
-    const cell = document.createElement("span");
-    cell.setAttribute("role", "columnheader");
+  // One shared scale across all problem cells; the Total column stays unshaded because it uses another scale.
+  const maximum = Math.max(...losses.flatMap((item) => item.values), 1);
+  const headerRow = excavatorHeatmap.createTHead().insertRow();
+  ["Excavator", ...problems.map((item) => item.name), "Total"].forEach((text) => {
+    const cell = document.createElement("th");
+    cell.scope = "col";
     cell.textContent = text;
-    header.append(cell);
+    headerRow.append(cell);
   });
-  problemFrequency.append(header);
-
-  const measureCell = (value, maximum, className, text) => {
-    const cell = document.createElement("div");
-    cell.className = `problem-measure ${className}`;
-    cell.setAttribute("role", "cell");
-    const track = document.createElement("div");
-    track.className = "source-trend-track";
-    const bar = document.createElement("i");
-    bar.style.setProperty("--bar-width", `${Math.max(2, value / maximum * 100)}%`);
-    track.append(bar);
-    const label = document.createElement("strong");
-    label.textContent = text;
-    cell.append(track, label);
-    return cell;
-  };
-  problems.forEach((item) => {
-    const row = document.createElement("div");
-    row.className = "problem-compare-row";
-    row.setAttribute("role", "row");
-    const name = document.createElement("span");
-    name.setAttribute("role", "rowheader");
+  const body = excavatorHeatmap.createTBody();
+  losses.forEach((item) => {
+    const row = body.insertRow();
+    const name = document.createElement("th");
+    name.scope = "row";
     name.textContent = item.name;
-    row.append(
-      name,
-      measureCell(item.bcm, maxVolume, "measure-bcm", number(Math.round(item.bcm))),
-      measureCell(item.freq, maxFrequency, "measure-freq", `${number(item.freq)}x`),
-    );
-    problemFrequency.append(row);
+    row.append(name);
+    item.values.forEach((value, index) => {
+      const cell = row.insertCell();
+      cell.title = `${item.name} · ${problems[index].name}: ${number(value)} BCM`;
+      if (value > 0) {
+        cell.style.setProperty("--heat", (6 + value / maximum * 56).toFixed(1));
+        cell.textContent = number(Math.round(value));
+      } else {
+        cell.className = "heat-empty";
+        cell.textContent = "–";
+      }
+    });
+    const total = row.insertCell();
+    total.className = "heat-total";
+    total.title = `${item.name} · semua problem: ${number(item.total)} BCM`;
+    total.textContent = number(Math.round(item.total));
   });
 }
 
@@ -311,7 +303,7 @@ async function loadSourceSheet(sheet = activeSourceSheet, dates = activeSourceSh
   } catch (error) {
     sourceSheetPeriod.textContent = "";
     problemTop10.replaceChildren();
-    problemFrequency.replaceChildren();
+    excavatorHeatmap.replaceChildren();
     sourceSheetError.textContent = error.message;
     sourceSheetError.hidden = false;
   }
