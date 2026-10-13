@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import math
+import calendar
 import csv
 import io
 import logging
@@ -77,6 +78,14 @@ CHAT_MONTH_NAMES = {
 }
 # Longest names first so "maret" wins over its "mar" prefix in the regex alternation.
 CHAT_MONTH_PATTERN = "|".join(sorted(CHAT_MONTH_NAMES, key=len, reverse=True))
+CHAT_RANGE_LIMIT = 4
+CHAT_RANGE_CONNECTOR = r"\s*(?:(?:hingga|sampai)(?:\s+dengan)?|s/d|s\.?d\.?|to|until|-|–)\s*(?:(?:tanggal|tgl\.?)\s+)?"
+CHAT_NAMED_DATE = rf"(?:\b(\d{{1,2}})\s+)?\b({CHAT_MONTH_PATTERN})\b(?:\s+(\d{{4}}))?"
+CHAT_NAMED_RANGE = re.compile(CHAT_NAMED_DATE + CHAT_RANGE_CONNECTOR + CHAT_NAMED_DATE)
+CHAT_NUMERIC_RANGES = (
+    (re.compile(rf"\b(\d{{4}})-(\d{{1,2}})-(\d{{1,2}}){CHAT_RANGE_CONNECTOR}(\d{{4}})-(\d{{1,2}})-(\d{{1,2}})\b"), (0, 1, 2)),
+    (re.compile(rf"\b(\d{{1,2}})[/.](\d{{1,2}})[/.](\d{{4}}){CHAT_RANGE_CONNECTOR}(\d{{1,2}})[/.](\d{{1,2}})[/.](\d{{4}})\b"), (2, 1, 0)),
+)
 
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -1571,6 +1580,47 @@ def mentioned_months(texts: list[str], available_months: list[tuple[int, int]], 
     return found
 
 
+def mentioned_date_ranges(text: str, available_years: list[int]) -> tuple[list[tuple[date, date]], str]:
+    """Find explicit date ranges such as "1 Januari hingga 30 September 2026" in a chat question.
+
+    Returns the ranges plus the question with those ranges removed, so their month names do not also
+    expand into daily rows. A range named without any year yields one range per year in the data.
+    """
+    ranges: list[tuple[date, date]] = []
+
+    def add(start_year: int, start_month: int, start_day: int | None, end_year: int, end_month: int, end_day: int | None) -> None:
+        """Record one range; a missing day means the first or last day of that month."""
+        try:
+            start = date(start_year, start_month, start_day or 1)
+            end = date(end_year, end_month, end_day or calendar.monthrange(end_year, end_month)[1])
+        except ValueError:
+            return
+        if start <= end and (start, end) not in ranges:
+            ranges.append((start, end))
+
+    lowered = text.lower()
+    for match in CHAT_NAMED_RANGE.finditer(lowered):
+        start_day, start_name, start_year, end_day, end_name, end_year = match.groups()
+        start_month, end_month = CHAT_MONTH_NAMES[start_name], CHAT_MONTH_NAMES[end_name]
+        # A range such as "November hingga Februari 2026" crosses the new year.
+        crosses_year = start_month > end_month
+        if start_year or end_year:
+            end = int(end_year) if end_year else int(start_year) + crosses_year
+            start = int(start_year) if start_year else end - crosses_year
+            year_pairs = [(start, end)]
+        else:
+            year_pairs = [(year - crosses_year, year) for year in available_years]
+        for start, end in year_pairs:
+            add(start, start_month, int(start_day) if start_day else None, end, end_month, int(end_day) if end_day else None)
+    lowered = CHAT_NAMED_RANGE.sub(" ", lowered)
+    for pattern, (year, month, day) in CHAT_NUMERIC_RANGES:
+        for match in pattern.finditer(lowered):
+            parts = [int(value) for value in match.groups()]
+            add(parts[year], parts[month], parts[day], parts[year + 3], parts[month + 3], parts[day + 3])
+        lowered = pattern.sub(" ", lowered)
+    return ranges[:CHAT_RANGE_LIMIT], lowered
+
+
 @app.get("/api/production")
 def production_data() -> tuple[Any, int] | Any:
     """Aggregate the public daily production sheet for the selected date range."""
@@ -1648,7 +1698,15 @@ def production_chat() -> tuple[Any, int] | Any:
     # Daily rows for every date would exceed provider token limits, so only months named in the latest
     # questions are expanded, falling back to a short dashboard filter range.
     available_months = sorted({(row["parsed_date"].year, row["parsed_date"].month) for row in all_rows})
-    recent_questions = [question, *[item["content"] for item in history if item["role"] == "user"][-2:][::-1]]
+    # Models add up long daily lists unreliably, so totals for a requested date range are computed here.
+    ranges, question_without_ranges = mentioned_date_ranges(question, sorted({year for year, _ in available_months}))
+    if ranges:
+        production["rentang_ditanya"] = []
+        for start, end in ranges:
+            range_rows = filter_production_rows(all_rows, start.isoformat(), end.isoformat())
+            summary = summarize_production(range_rows) if range_rows else "tidak ada data"
+            production["rentang_ditanya"].append({"dari": start.isoformat(), "sampai": end.isoformat(), "hasil": summary})
+    recent_questions = [question_without_ranges, *[item["content"] for item in history if item["role"] == "user"][-2:][::-1]]
     months = mentioned_months(recent_questions, available_months, datetime.now(LOG_TIMEZONE).date())
     daily_rows = [row for row in all_rows if (row["parsed_date"].year, row["parsed_date"].month) in months]
     if not daily_rows and "filter_dashboard" in production and len(filtered_rows) <= CHAT_DAILY_ROW_LIMIT:
@@ -1661,14 +1719,17 @@ def production_chat() -> tuple[Any, int] | Any:
         {
             "role": "system",
             "content": (
-                "Kamu asisten produksi tambang. Jawab hanya dengan jawaban akhir dalam "
+                "Namamu Si Moco, asisten produksi tambang. Jawab hanya dengan jawaban akhir dalam "
                 "bahasa Indonesia, ringkas, maksimal tiga kalimat. Jangan tampilkan proses berpikir, "
                 "analisis internal, atau langkah penalaran. Jawab hanya memakai data JSON yang diberikan: "
                 "semua_data (total seluruh tanggal), per_bulan (setiap bulan), filter_dashboard (rentang yang "
                 "sedang dibuka pengguna, bila ada), dan per_hari (rincian harian bulan yang ditanyakan, bila ada). "
                 "per_bulan dan per_hari berbentuk tabel: kolom berisi nama tiap nilai, baris berisi nilainya "
                 "dengan urutan yang sama. Satuan: OB dalam BCM, coal dalam MT, pdty_all dalam BCM/jam, rain_hours dalam "
-                "jam, fleet_actual dalam jumlah fleet. "
+                "jam, fleet_actual dalam jumlah fleet. rentang_ditanya (bila ada) berisi hasil yang sudah dihitung "
+                "untuk rentang tanggal di pertanyaan; pakai angkanya apa adanya, jangan menjumlah ulang. hasil.range "
+                "menunjukkan tanggal data yang benar-benar tersedia. Jika tahun tidak disebut, rentang_ditanya "
+                "berisi setiap tahun; sebutkan semuanya. "
                 "Pertanyaan boleh tentang tanggal mana pun, tidak terbatas filter dashboard. Jika pengguna "
                 "menyebut 'periode ini' atau 'dashboard', pakai filter_dashboard. Pakai percakapan sebelumnya "
                 "untuk memahami pertanyaan lanjutan. Jangan mengarang angka. Nilai PA, UA, dan UO berupa "

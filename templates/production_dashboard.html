@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
-  <title>Produksi Tambang - Pit Dispatch Monitoring</title>
+  <title>Performance Production - Pit Dispatch Monitoring</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='20261013-1') }}">
 </head>
 <body>
@@ -14,7 +14,7 @@
       <nav class="topnav">
         <a href="/">Analisis</a>
         <a href="/dashboard">Dashboard laporan</a>
-        <a class="active" href="/production-dashboard">Produksi tambang</a>
+        <a class="active" href="/production-dashboard">Performance Production</a>
       </nav>
     </header>
 
@@ -174,8 +174,8 @@
     </section>
   </main>
   <button id="production-chat-toggle" class="production-chat-toggle" type="button" aria-label="Tanya si Moco"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 4h16v12H9l-5 4V4Zm4 5h8M8 12h5" /></svg><span>Tanya si Moco</span></button>
-  <section id="production-chat" class="production-chat" aria-label="Chat produksi" hidden>
-    <header class="production-chat-header"><div><strong>Asisten Produksi</strong><small id="production-chat-scope">Semua tanggal bisa ditanya</small></div><button id="production-chat-close" type="button" aria-label="Tutup chat">×</button></header>
+  <section id="production-chat" class="production-chat" aria-label="Chat Si Moco" hidden>
+    <header class="production-chat-header"><div><strong>Si Moco</strong><small id="production-chat-scope">Semua tanggal bisa ditanya</small></div><button id="production-chat-close" type="button" aria-label="Tutup chat">×</button></header>
     <div id="production-chat-messages" class="production-chat-messages" aria-live="polite"><p class="chat-message assistant">Tanyakan produksi, target, material, cuaca, fleet, PA, UA, atau UO untuk tanggal atau bulan mana pun, misalnya "OB 3 Maret 2025".</p></div>
     <form id="production-chat-form" class="production-chat-form"><input id="production-chat-input" type="text" maxlength="1000" placeholder="Tanyakan data produksi…" autocomplete="off" required><button type="submit">Kirim</button></form>
   </section>
