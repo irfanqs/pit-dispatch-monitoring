@@ -199,9 +199,13 @@ chatForm.addEventListener("submit", async (event) => {
     });
     const contentType = response.headers.get("content-type") || "";
     if (!contentType.includes("application/json")) {
+      // Cloudflare Tunnel answers 502/504/52x with its own HTML page when Flask is down or too slow.
+      const gatewayError = response.status === 502 || response.status === 504 || response.status >= 520;
       const message = response.status === 404
         ? "Endpoint chat tidak ditemukan di server ini. Mulai ulang versi aplikasi terbaru."
-        : `Server mengirim HTML, bukan JSON (HTTP ${response.status}). Periksa jendela Flask untuk error.`;
+        : gatewayError
+          ? `Tunnel tidak mendapat jawaban dari server Flask (HTTP ${response.status}). Pastikan app.py masih berjalan, lalu coba lagi.`
+          : `Server mengirim HTML, bukan JSON (HTTP ${response.status}). Periksa jendela Flask untuk error.`;
       throw new Error(message);
     }
     const data = await response.json();

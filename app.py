@@ -1376,7 +1376,7 @@ def dashboard_source_sheet() -> tuple[Any, int] | Any:
         excavator_losses = excavator_problem_losses(start_date, end_date, [item["name"] for item in problems])
     except requests.RequestException:
         logger.exception("Failed to load spreadsheet tab %s", sheet_name)
-        return jsonify(error="Data spreadsheet tidak dapat dimuat."), 502
+        return jsonify(error="Data spreadsheet tidak dapat dimuat."), 503
 
     headers = rows[0] if rows else []
     data_rows = filter_source_sheet_rows(rows[1:], start_date, end_date)
@@ -1494,28 +1494,46 @@ def summarize_production(rows: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def production_breakdown(rows: list[dict[str, Any]], period_format: str) -> list[dict[str, Any]]:
-    """Summarize key production metrics per period so chat can answer monthly or daily questions."""
+CHAT_BREAKDOWN_COLUMNS = {
+    "ob_plan": ("PLAN OB", production_total),
+    "ob_actual": ("ACT OB", production_total),
+    "coal_plan": ("PLAN COAL", production_total),
+    "coal_actual": ("ACT COAL", production_total),
+    "sr_actual": ("SR", production_average),
+    "pdty_all": ("PDTY ALL", production_average),
+    "rain_hours": ("RAIN", production_total),
+    "fleet_actual": ("ACTUAL FLEET RUNNING", production_average),
+    "pa_prod_actual": ("ACT PA PROD EQP", production_average),
+    "ua_actual": ("ACT UA", production_average),
+    "uo_actual": ("ACT UO", production_average),
+}
+
+
+def compact_number(value: float | None) -> float | int | None:
+    """Drop a trailing .0 so whole numbers cost fewer tokens in the chat context."""
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    return value
+
+
+def production_breakdown(rows: list[dict[str, Any]], period_format: str) -> dict[str, list[Any]]:
+    """Summarize key production metrics per period as a column/row table so chat can answer monthly or daily questions.
+
+    Keys are listed once instead of per period, which roughly halves the tokens sent to the AI provider.
+    """
     periods: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in rows:
         periods[row["parsed_date"].strftime(period_format)].append(row)
-    return [
-        {
-            "periode": period,
-            "ob_plan": production_total(period_rows, "PLAN OB"),
-            "ob_actual": production_total(period_rows, "ACT OB"),
-            "coal_plan": production_total(period_rows, "PLAN COAL"),
-            "coal_actual": production_total(period_rows, "ACT COAL"),
-            "sr_actual": production_average(period_rows, "SR"),
-            "pdty_all": production_average(period_rows, "PDTY ALL"),
-            "rain_hours": production_total(period_rows, "RAIN"),
-            "fleet_actual": production_average(period_rows, "ACTUAL FLEET RUNNING"),
-            "pa_prod_actual": production_average(period_rows, "ACT PA PROD EQP"),
-            "ua_actual": production_average(period_rows, "ACT UA"),
-            "uo_actual": production_average(period_rows, "ACT UO"),
-        }
-        for period, period_rows in sorted(periods.items())
-    ]
+    return {
+        "kolom": ["periode", *CHAT_BREAKDOWN_COLUMNS],
+        "baris": [
+            [
+                period,
+                *(compact_number(summarize(period_rows, column)) for column, summarize in CHAT_BREAKDOWN_COLUMNS.values()),
+            ]
+            for period, period_rows in sorted(periods.items())
+        ],
+    }
 
 
 def mentioned_months(texts: list[str], available_months: list[tuple[int, int]], today: date) -> list[tuple[int, int]]:
@@ -1562,7 +1580,7 @@ def production_data() -> tuple[Any, int] | Any:
             return jsonify(error="Tidak ada data pada rentang tanggal ini."), 404
         return jsonify(summarize_production(rows))
     except (OSError, ValueError, requests.RequestException) as error:
-        return jsonify(error=f"Data produksi tidak dapat dimuat: {error}"), 502
+        return jsonify(error=f"Data produksi tidak dapat dimuat: {error}"), 503
 
 
 @app.post("/api/production/chat")
@@ -1614,7 +1632,7 @@ def production_chat() -> tuple[Any, int] | Any:
         all_rows = load_production_rows()
         filtered_rows = filter_production_rows(all_rows, payload.get("start"), payload.get("end"))
     except (OSError, ValueError, requests.RequestException) as error:
-        return jsonify(error=f"Data produksi tidak dapat dimuat: {error}"), 502
+        return jsonify(error=f"Data produksi tidak dapat dimuat: {error}"), 503
     if not all_rows:
         return jsonify(error="Data produksi belum tersedia."), 404
 
@@ -1648,6 +1666,9 @@ def production_chat() -> tuple[Any, int] | Any:
                 "analisis internal, atau langkah penalaran. Jawab hanya memakai data JSON yang diberikan: "
                 "semua_data (total seluruh tanggal), per_bulan (setiap bulan), filter_dashboard (rentang yang "
                 "sedang dibuka pengguna, bila ada), dan per_hari (rincian harian bulan yang ditanyakan, bila ada). "
+                "per_bulan dan per_hari berbentuk tabel: kolom berisi nama tiap nilai, baris berisi nilainya "
+                "dengan urutan yang sama. Satuan: OB dalam BCM, coal dalam MT, pdty_all dalam BCM/jam, rain_hours dalam "
+                "jam, fleet_actual dalam jumlah fleet. "
                 "Pertanyaan boleh tentang tanggal mana pun, tidak terbatas filter dashboard. Jika pengguna "
                 "menyebut 'periode ini' atau 'dashboard', pakai filter_dashboard. Pakai percakapan sebelumnya "
                 "untuk memahami pertanyaan lanjutan. Jangan mengarang angka. Nilai PA, UA, dan UO berupa "
@@ -1690,9 +1711,11 @@ def production_chat() -> tuple[Any, int] | Any:
             if attempt + 1 < len(provider_order):
                 logger.info("Falling back to %s", provider_config[provider_order[attempt + 1]]["provider_name"])
                 continue
-            return jsonify(error="Asisten AI tidak merespons. Coba lagi sebentar."), 502
+            # Upstream failures use 503, not 502: Cloudflare replaces origin 502/504 bodies with its own HTML page.
+            return jsonify(error="Asisten AI tidak merespons. Coba lagi sebentar."), 503
 
-        if response.status_code in {402, 403, 429, 500, 502, 503, 504} and attempt + 1 < len(provider_order):
+        # Groq answers 413 when the context exceeds the free-tier tokens-per-minute limit; OpenRouter allows more.
+        if response.status_code in {402, 403, 413, 429, 500, 502, 503, 504} and attempt + 1 < len(provider_order):
             logger.warning(
                 "%s returned HTTP %s; falling back to %s",
                 config["provider_name"],
@@ -1701,11 +1724,11 @@ def production_chat() -> tuple[Any, int] | Any:
             )
             continue
         if response.status_code == 401:
-            return jsonify(error=f"API key {config['provider_name']} tidak valid. Periksa {config['key_name']} di file .env."), 502
+            return jsonify(error=f"API key {config['provider_name']} tidak valid. Periksa {config['key_name']} di file .env."), 503
         if response.status_code == 404:
-            return jsonify(error=f"Model {config['provider_name']} tidak tersedia. Periksa konfigurasi model di file .env."), 502
+            return jsonify(error=f"Model {config['provider_name']} tidak tersedia. Periksa konfigurasi model di file .env."), 503
         if response.status_code == 429:
-            return jsonify(error=f"Batas penggunaan {config['provider_name']} dan fallback tercapai."), 502
+            return jsonify(error=f"Batas penggunaan {config['provider_name']} dan fallback tercapai."), 503
         try:
             response.raise_for_status()
             choice = response.json()["choices"][0]
@@ -1715,11 +1738,11 @@ def production_chat() -> tuple[Any, int] | Any:
                 logger.warning(
                     "%s returned an empty answer (finish_reason=%s)", config["provider_name"], choice.get("finish_reason")
                 )
-                return jsonify(error="Asisten AI tidak memberi jawaban. Coba ulangi pertanyaan dengan lebih singkat."), 502
+                return jsonify(error="Asisten AI tidak memberi jawaban. Coba ulangi pertanyaan dengan lebih singkat."), 503
             return jsonify(answer=answer)
         except (requests.RequestException, AttributeError, KeyError, IndexError, TypeError, ValueError) as error:
             logger.warning("%s production chat response failed: %s", config["provider_name"], error)
-            return jsonify(error="Asisten AI gagal menjawab. Coba lagi sebentar."), 502
+            return jsonify(error="Asisten AI gagal menjawab. Coba lagi sebentar."), 503
 
     return jsonify(error="Chat AI belum dikonfigurasi. Atur API key provider di file .env."), 503
 
