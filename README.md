@@ -75,7 +75,7 @@ Isi `GROQ_API_KEY` dan `OPENROUTER_API_KEY`. Groq menjadi provider utama dengan 
 ### Video Rekaman
 
 1. Pilih **Upload video** dan pilih file.
-2. Jeda preview pada frame yang jelas.
+2. Jeda preview pada frame yang jelas. Jika browser tidak bisa memutar video (misalnya H.265/HEVC, ekspor DVR, atau H.264 10-bit), aplikasi otomatis mengunggah dan mengonversinya ke MP4 H.264 tanpa audio, maksimal 4K. Video hasil konversi dipakai untuk preview dan analisis, jadi file tidak diunggah dua kali.
 3. Pilih metode **Poligon** atau **Gate**.
 4. Klik titik kalibrasi pada frame.
 5. Masukkan jarak nyata dalam meter.

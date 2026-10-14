@@ -67,6 +67,10 @@ let corridorPoints = [];
 let routePoints = [];
 let polygonStep = "corridor";
 let calibrationUrl;
+// Set once the server has converted a video the browser could not play; the analysis then reuses it.
+let convertedVideoId = null;
+let previewIsConverted = false;
+let conversionToken = 0;
 let gateCount = 2;
 let gateDistances = [""];
 let rtspPreviewUrl;
@@ -535,6 +539,10 @@ fileInput.addEventListener("click", () => {
 fileInput.addEventListener("change", () => {
   const file = fileInput.files[0];
   fileName.textContent = file?.name ?? "Belum ada file dipilih";
+  convertedVideoId = null;
+  previewIsConverted = false;
+  conversionToken += 1;
+  submitButton.disabled = false;
   if (!file) return;
   calibrationVideo.pause();
   calibrationVideo.removeAttribute("src");
@@ -600,16 +608,66 @@ loadRtspButton?.addEventListener("click", async () => {
 
 calibrationVideo.addEventListener("loadedmetadata", () => {
   resizeCalibrationCanvas();
-  setPreviewStatus("Preview siap. Jeda video pada frame yang paling jelas, lalu pilih titik kalibrasi.", "ready");
+  const prefix = previewIsConverted ? "Video sudah dikonversi ke MP4 H.264. " : "Preview siap. ";
+  setPreviewStatus(`${prefix}Jeda video pada frame yang paling jelas, lalu pilih titik kalibrasi.`, "ready");
   updateCalibrationControls();
 });
 
 calibrationVideo.addEventListener("error", () => {
-  setPreviewStatus(
-    "Preview tidak dapat diputar oleh browser. Gunakan MP4 H.264 atau konversi video terlebih dahulu.",
-    "error",
-  );
+  const file = fileInput.files[0];
+  if (previewIsConverted || selectedSource() !== "file" || !file) {
+    setPreviewStatus("Preview tidak dapat diputar oleh browser, termasuk setelah dikonversi. Coba browser lain.", "error");
+    return;
+  }
+  convertForPreview(file).catch((error) => {
+    submitButton.disabled = false;
+    setPreviewStatus(error.message, "error");
+  });
 });
+
+function uploadForConversion(file, token) {
+  return new Promise((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    const body = new FormData();
+    body.append("video", file);
+    request.open("POST", "/api/videos/convert");
+    request.responseType = "json";
+    request.upload.addEventListener("progress", (event) => {
+      if (token !== conversionToken || !event.lengthComputable) return;
+      const percent = Math.round(event.loaded / event.total * 100);
+      setPreviewStatus(`Browser tidak bisa memutar video ini, jadi video dikonversi ke MP4 H.264. Mengunggah ${percent}%…`);
+    });
+    request.addEventListener("load", () => {
+      if (request.status === 202 && request.response?.conversion_id) resolve(request.response.conversion_id);
+      else reject(new Error(request.response?.error || `Video tidak dapat diunggah untuk konversi (HTTP ${request.status}).`));
+    });
+    request.addEventListener("error", () => reject(new Error("Koneksi terputus saat mengunggah video untuk konversi.")));
+    request.send(body);
+  });
+}
+
+async function convertForPreview(file) {
+  const token = ++conversionToken;
+  // Calibration and analysis both need the converted file, so analysis waits for it.
+  submitButton.disabled = true;
+  setPreviewStatus("Browser tidak bisa memutar video ini, jadi video dikonversi ke MP4 H.264. Mengunggah…");
+  const conversionId = await uploadForConversion(file, token);
+  while (token === conversionToken) {
+    const response = await fetch(`/api/videos/convert/${conversionId}`, { cache: "no-store" });
+    const status = await response.json();
+    if (!response.ok || status.status === "error") throw new Error(status.error || "Video tidak dapat dikonversi.");
+    if (status.status === "done") {
+      convertedVideoId = conversionId;
+      previewIsConverted = true;
+      submitButton.disabled = false;
+      calibrationVideo.src = status.video_url;
+      calibrationVideo.load();
+      return;
+    }
+    setPreviewStatus(`Mengonversi video ke MP4 H.264… ${status.progress}%`);
+    await new Promise((resolve) => { window.setTimeout(resolve, 1000); });
+  }
+}
 
 modeInputs.forEach((input) => {
   input.addEventListener("change", () => {
@@ -900,7 +958,12 @@ form.addEventListener("submit", async (event) => {
       await startMultiAnalysis();
       return;
     }
-    const response = await fetch("/api/jobs", { method: "POST", body: new FormData(form) });
+    const body = new FormData(form);
+    if (selectedSource() === "file" && convertedVideoId) {
+      body.delete("video");
+      body.set("converted_video_id", convertedVideoId);
+    }
+    const response = await fetch("/api/jobs", { method: "POST", body });
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.error || "Video tidak dapat dikirim.");
     saveActiveAnalysisJob(payload.job_id);

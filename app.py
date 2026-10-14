@@ -17,11 +17,12 @@ import uuid
 from collections import defaultdict, deque
 from collections import Counter
 from datetime import date, datetime, timedelta, timezone
+from fractions import Fraction
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from flask import Flask, Response, jsonify, render_template, request, send_from_directory, stream_with_context
+from flask import Flask, Response, jsonify, render_template, request, send_file, send_from_directory, stream_with_context
 from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
 
@@ -100,6 +101,10 @@ logger.info(
 app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024 * 1024
 jobs: dict[str, dict[str, Any]] = {}
 jobs_lock = threading.Lock()
+conversions: dict[str, dict[str, Any]] = {}
+conversions_lock = threading.Lock()
+# Browsers commonly refuse H.264 above 4K, so converted previews are scaled down to fit inside it.
+CONVERTED_VIDEO_MAX_SIZE = (3840, 2160)
 Point = tuple[float, float]
 
 
@@ -859,15 +864,136 @@ def index() -> str:
     return render_template("index.html", default_source=DEFAULT_SOURCE)
 
 
+def update_conversion(conversion_id: str, **values: Any) -> None:
+    """Merge state into one browser-compatibility conversion."""
+    with conversions_lock:
+        conversions[conversion_id].update(values)
+
+
+def convert_to_browser_video(conversion_id: str, source_path: Path, target_path: Path) -> None:
+    """Re-encode a video the browser cannot preview (HEVC, DVR exports, 10-bit) into H.264 MP4 without audio."""
+    import av
+
+    try:
+        with av.open(str(source_path)) as source:
+            if not source.streams.video:
+                raise ValueError("File tidak berisi stream video.")
+            stream = source.streams.video[0]
+            stream.thread_type = "AUTO"
+            fps = stream.average_rate or stream.guessed_rate or 25
+            width, height = stream.codec_context.width, stream.codec_context.height
+            if not width or not height:
+                raise ValueError("Resolusi video tidak dapat dibaca.")
+            scale = min(1.0, CONVERTED_VIDEO_MAX_SIZE[0] / width, CONVERTED_VIDEO_MAX_SIZE[1] / height)
+            # yuv420p needs even dimensions.
+            output_width, output_height = int(width * scale) // 2 * 2, int(height * scale) // 2 * 2
+            # Containers without a frame count still report duration, which is enough for a progress estimate.
+            duration_seconds = float(stream.duration * stream.time_base) if stream.duration else 0.0
+            total_frames = stream.frames or round(duration_seconds * float(fps))
+
+            output = av.open(str(target_path), mode="w", options={"movflags": "+faststart"})
+            try:
+                output_stream = output.add_stream("libx264", rate=fps)
+                output_stream.width, output_stream.height = output_width, output_height
+                output_stream.pix_fmt = "yuv420p"
+                output_stream.options = {"crf": "20", "preset": "veryfast"}
+                frame_time_base = Fraction(1, 1) / fps
+                for index, frame in enumerate(source.decode(stream), start=1):
+                    converted = frame.reformat(width=output_width, height=output_height, format="yuv420p")
+                    # Renumber frames at a constant rate so the MP4 reports the fps that speed estimation relies on.
+                    converted.pts = index - 1
+                    converted.time_base = frame_time_base
+                    for packet in output_stream.encode(converted):
+                        output.mux(packet)
+                    if total_frames and index % 25 == 0:
+                        update_conversion(conversion_id, progress=min(99, round(index / total_frames * 100)))
+                for packet in output_stream.encode():
+                    output.mux(packet)
+            finally:
+                output.close()
+        update_conversion(conversion_id, status="done", progress=100)
+    except Exception as error:
+        logger.exception("Video conversion %s failed", conversion_id)
+        target_path.unlink(missing_ok=True)
+        # FFmpeg errors carry the server file path in str(error); strerror holds only the reason.
+        reason = getattr(error, "strerror", None) or str(error)
+        update_conversion(conversion_id, status="error", error=f"Video tidak dapat dikonversi: {reason}")
+    finally:
+        source_path.unlink(missing_ok=True)
+
+
+@app.post("/api/videos/convert")
+def create_video_conversion() -> tuple[Any, int]:
+    """Accept a video the browser cannot preview and convert it to H.264 MP4 in the background."""
+    video = request.files.get("video")
+    if video is None or not video.filename:
+        return jsonify(error="Pilih file video terlebih dahulu."), 400
+    if not allowed_video(video.filename):
+        return jsonify(error="Format video tidak didukung."), 400
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    conversion_id = uuid.uuid4().hex
+    filename = secure_filename(video.filename)
+    source_path = UPLOAD_DIR / f"{conversion_id}-source-{filename}"
+    target_path = UPLOAD_DIR / f"{conversion_id}-{Path(filename).stem}-h264.mp4"
+    video.save(source_path)
+    with conversions_lock:
+        conversions[conversion_id] = {
+            "status": "processing",
+            "progress": 0,
+            "error": None,
+            "name": filename,
+            "path": target_path,
+        }
+    threading.Thread(
+        target=convert_to_browser_video,
+        args=(conversion_id, source_path, target_path),
+        daemon=True,
+    ).start()
+    return jsonify(conversion_id=conversion_id), 202
+
+
+@app.get("/api/videos/convert/<conversion_id>")
+def video_conversion_status(conversion_id: str) -> tuple[Any, int] | Any:
+    """Report progress of a conversion and, once finished, where its video is served."""
+    with conversions_lock:
+        conversion = dict(conversions.get(conversion_id) or {})
+    if not conversion:
+        return jsonify(error="Konversi video tidak ditemukan."), 404
+    return jsonify(
+        status=conversion["status"],
+        progress=conversion["progress"],
+        error=conversion["error"],
+        video_url=f"/api/videos/convert/{conversion_id}/video" if conversion["status"] == "done" else None,
+    )
+
+
+@app.get("/api/videos/convert/<conversion_id>/video")
+def converted_video(conversion_id: str) -> tuple[Any, int] | Response:
+    """Serve a finished conversion with range support so the preview can seek."""
+    with conversions_lock:
+        conversion = dict(conversions.get(conversion_id) or {})
+    if conversion.get("status") != "done":
+        return jsonify(error="Video hasil konversi belum siap."), 404
+    return send_file(conversion["path"], mimetype="video/mp4", conditional=True)
+
+
 @app.post("/api/jobs")
 def create_job() -> tuple[Any, int] | Any:
     """Save an uploaded video and start its estimation job in a background thread."""
     source_type = request.form.get("source_type", "file")
     video = request.files.get("video")
     rtsp_url = request.form.get("rtsp_url", "").strip()
+    # A video the browser could not preview was already uploaded and converted; reuse it instead of a second upload.
+    converted_video_id = request.form.get("converted_video_id", "").strip() if source_type != "rtsp" else ""
+    conversion: dict[str, Any] = {}
     if source_type == "rtsp":
         if not rtsp_url.lower().startswith("rtsp://"):
             return jsonify(error="URL CCTV harus diawali rtsp://."), 400
+    elif converted_video_id:
+        with conversions_lock:
+            conversion = dict(conversions.get(converted_video_id) or {})
+        if conversion.get("status") != "done":
+            return jsonify(error="Video hasil konversi belum siap atau sudah tidak tersedia. Pilih ulang file video."), 400
     elif video is None or not video.filename:
         return jsonify(error="Pilih file video terlebih dahulu."), 400
     elif not allowed_video(video.filename):
@@ -906,10 +1032,17 @@ def create_job() -> tuple[Any, int] | Any:
     RESULT_DIR.mkdir(parents=True, exist_ok=True)
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     job_id = uuid.uuid4().hex
-    filename = "CCTV RTSP" if source_type == "rtsp" else secure_filename(video.filename)
-    source_path: Path | str = rtsp_url if source_type == "rtsp" else UPLOAD_DIR / f"{job_id}-{filename}"
     target_path = RESULT_DIR / f"{job_id}-estimated.mp4"
-    if source_type != "rtsp":
+    source_path: Path | str
+    if source_type == "rtsp":
+        filename = "CCTV RTSP"
+        source_path = rtsp_url
+    elif conversion:
+        filename = conversion["name"]
+        source_path = conversion["path"]
+    else:
+        filename = secure_filename(video.filename)
+        source_path = UPLOAD_DIR / f"{job_id}-{filename}"
         video.save(source_path)
     with jobs_lock:
         jobs[job_id] = {
