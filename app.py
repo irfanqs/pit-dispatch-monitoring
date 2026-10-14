@@ -62,7 +62,7 @@ SOURCE_SHEET_CACHE_TTL = 300
 MATERIAL_COLUMNS = ("RP", "ON", "FD", "BL", "TS", "MP", "MC", "BD", "CL", "N P")
 MAX_MULTI_CAMERAS = 16
 CHAT_DAILY_ROW_LIMIT = 62
-CHAT_MONTH_NAMES = {
+MONTH_NAMES = {
     "januari": 1, "january": 1, "jan": 1,
     "februari": 2, "february": 2, "feb": 2,
     "maret": 3, "march": 3, "mar": 3,
@@ -77,10 +77,10 @@ CHAT_MONTH_NAMES = {
     "desember": 12, "december": 12, "des": 12, "dec": 12,
 }
 # Longest names first so "maret" wins over its "mar" prefix in the regex alternation.
-CHAT_MONTH_PATTERN = "|".join(sorted(CHAT_MONTH_NAMES, key=len, reverse=True))
+MONTH_PATTERN = "|".join(sorted(MONTH_NAMES, key=len, reverse=True))
 CHAT_RANGE_LIMIT = 4
 CHAT_RANGE_CONNECTOR = r"\s*(?:(?:hingga|sampai)(?:\s+dengan)?|s/d|s\.?d\.?|to|until|-|–)\s*(?:(?:tanggal|tgl\.?)\s+)?"
-CHAT_NAMED_DATE = rf"(?:\b(\d{{1,2}})\s+)?\b({CHAT_MONTH_PATTERN})\b(?:\s+(\d{{4}}))?"
+CHAT_NAMED_DATE = rf"(?:\b(\d{{1,2}})\s+)?\b({MONTH_PATTERN})\b(?:\s+(\d{{4}}))?"
 CHAT_NAMED_RANGE = re.compile(CHAT_NAMED_DATE + CHAT_RANGE_CONNECTOR + CHAT_NAMED_DATE)
 CHAT_NUMERIC_RANGES = (
     (re.compile(rf"\b(\d{{4}})-(\d{{1,2}})-(\d{{1,2}}){CHAT_RANGE_CONNECTOR}(\d{{4}})-(\d{{1,2}})-(\d{{1,2}})\b"), (0, 1, 2)),
@@ -1270,13 +1270,22 @@ def load_source_sheet_rows(sheet_name: str) -> list[list[str]]:
 
 
 def parse_source_sheet_date(value: str) -> date | None:
-    """Parse dates used by DATA_BCM and DATA_QTY tabs."""
-    for date_format in ("%m/%d/%Y", "%d-%b-%y"):
-        try:
-            return datetime.strptime(value.strip(), date_format).date()
-        except ValueError:
-            continue
-    return None
+    """Parse dates used by DATA_BCM ("8/1/2026") and DATA_QTY ("1-Agu-26") tabs."""
+    value = value.strip()
+    try:
+        return datetime.strptime(value, "%m/%d/%Y").date()
+    except ValueError:
+        pass
+    # DATA_QTY uses Indonesian month abbreviations ("Mei", "Agu", "Okt", "Des") that strptime's %b rejects.
+    match = re.fullmatch(r"(\d{1,2})-([A-Za-z]+)-(\d{2}|\d{4})", value)
+    month = MONTH_NAMES.get(match[2].lower()) if match else None
+    if not month:
+        return None
+    year = int(match[3])
+    try:
+        return date(year + 2000 if year < 100 else year, month, int(match[1]))
+    except ValueError:
+        return None
 
 
 @app.get("/dashboard")
@@ -1570,8 +1579,8 @@ def mentioned_months(texts: list[str], available_months: list[tuple[int, int]], 
             add(int(match[1]), int(match[2]))
         for match in re.finditer(r"\b\d{1,2}[/.-](\d{1,2})[/.-](\d{2,4})\b", lowered):
             add(full_year(match[2]), int(match[1]))
-        for match in re.finditer(rf"\b({CHAT_MONTH_PATTERN})\b(?:\s+('?\d{{2}}|\d{{4}})\b)?", lowered):
-            add(full_year(match[2]), CHAT_MONTH_NAMES[match[1]])
+        for match in re.finditer(rf"\b({MONTH_PATTERN})\b(?:\s+('?\d{{2}}|\d{{4}})\b)?", lowered):
+            add(full_year(match[2]), MONTH_NAMES[match[1]])
         if "bulan ini" in lowered or "hari ini" in lowered or "minggu ini" in lowered:
             add(today.year, today.month)
         if "bulan lalu" in lowered or "kemarin" in lowered or "minggu lalu" in lowered:
@@ -1601,7 +1610,7 @@ def mentioned_date_ranges(text: str, available_years: list[int]) -> tuple[list[t
     lowered = text.lower()
     for match in CHAT_NAMED_RANGE.finditer(lowered):
         start_day, start_name, start_year, end_day, end_name, end_year = match.groups()
-        start_month, end_month = CHAT_MONTH_NAMES[start_name], CHAT_MONTH_NAMES[end_name]
+        start_month, end_month = MONTH_NAMES[start_name], MONTH_NAMES[end_name]
         # A range such as "November hingga Februari 2026" crosses the new year.
         crosses_year = start_month > end_month
         if start_year or end_year:
